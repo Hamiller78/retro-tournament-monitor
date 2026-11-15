@@ -4,10 +4,10 @@ import type { GameSettings, Stage, StageSettings } from '../../shared/contracts'
 const input = 'w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-white';
 const button = 'rounded-lg bg-violet-600 px-4 py-2 font-semibold text-white hover:bg-violet-500 disabled:opacity-50';
 const secondary = 'rounded-lg border border-slate-600 px-3 py-2 text-sm hover:bg-slate-800';
-type Props = { stage: Stage; tournamentId: string; token: string; onChange: () => void; onError: (message: string) => void; onClose: () => void };
+type Props = { stage: Stage; tournamentId: string; token: string; onChange: () => void; onSaved: (stageId: string, settings: StageSettings) => void; onError: (message: string) => void; onClose: () => void };
 const blankGame = (): GameSettings => ({ name: '', resultKind: 'score', higherIsBetter: true, attempts: 1 });
 
-export function StageSettingsEditor({ stage, tournamentId, token, onChange, onError, onClose }: Props) {
+export function StageSettingsEditor({ stage, tournamentId, token, onChange, onSaved, onError, onClose }: Props) {
   const existing = stage.settings;
   const [stations, setStations] = useState<GameSettings[][]>(() => [existing?.stations?.[0]?.games ?? [], existing?.stations?.[1]?.games ?? []]);
   const [points, setPoints] = useState(() => existing?.points?.join(', ') ?? '');
@@ -24,7 +24,7 @@ export function StageSettingsEditor({ stage, tournamentId, token, onChange, onEr
     try {
       const response = await fetch(`/api/tournaments/${tournamentId}/stages/${stage.id}/settings`, { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(settings) });
       const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Could not save settings.');
-      onChange(); onClose();
+      onSaved(stage.id, settings); onChange(); onClose();
     } catch (error) { onError((error as Error).message); } finally { setBusy(false); }
   }
   return <form onSubmit={save} className="mt-5 space-y-4 rounded-lg border border-violet-800 p-4"><h4 className="font-semibold">Game settings: {stage.name}</h4>

@@ -8,6 +8,10 @@ import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypt
 import type { WebSocket } from 'ws';
 import { registerStageRoutes } from './stages';
 import { registerDrawRoutes } from './draws';
+import { registerStationRoutes } from './stations';
+import { registerLeaderboardRoutes } from './leaderboardRoutes';
+import { registerForfeitRoutes } from './forfeits';
+import { registerBackupRoutes } from './backups';
 
 const text = (value: unknown, max: number): string | null => typeof value === 'string' && value.trim().length > 0 && value.trim().length <= max ? value.trim() : null;
 const pinValid = (value: unknown): value is string => typeof value === 'string' && /^\d{4,12}$/.test(value);
@@ -22,6 +26,9 @@ export async function createApp(databasePath = 'data/retromania.sqlite') {
     CREATE TABLE IF NOT EXISTS stages (id TEXT PRIMARY KEY, tournament_id TEXT NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE, name TEXT NOT NULL, kind TEXT NOT NULL, participant_count INTEGER, position INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS stage_settings (stage_id TEXT PRIMARY KEY REFERENCES stages(id) ON DELETE CASCADE, settings TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS station_draws (stage_id TEXT NOT NULL REFERENCES stages(id) ON DELETE CASCADE, station INTEGER NOT NULL CHECK (station IN (0, 1)), draw_id TEXT NOT NULL, game_index INTEGER NOT NULL, confirmed INTEGER NOT NULL CHECK (confirmed IN (0, 1)), PRIMARY KEY(stage_id, station));
+    CREATE TABLE IF NOT EXISTS station_sessions (stage_id TEXT NOT NULL REFERENCES stages(id) ON DELETE CASCADE, station INTEGER NOT NULL, token TEXT NOT NULL, active_participant TEXT REFERENCES participants(id) ON DELETE SET NULL, PRIMARY KEY(stage_id, station));
+    CREATE TABLE IF NOT EXISTS attempts (request_id TEXT PRIMARY KEY, stage_id TEXT NOT NULL REFERENCES stages(id) ON DELETE RESTRICT, station INTEGER NOT NULL, participant_id TEXT NOT NULL REFERENCES participants(id) ON DELETE RESTRICT, attempt INTEGER NOT NULL, value REAL NOT NULL, UNIQUE(stage_id, station, participant_id, attempt));
+    CREATE TABLE IF NOT EXISTS stage_forfeits (stage_id TEXT NOT NULL REFERENCES stages(id) ON DELETE RESTRICT, participant_id TEXT NOT NULL REFERENCES participants(id) ON DELETE RESTRICT, PRIMARY KEY(stage_id, participant_id));
   `);
   const app = Fastify({ logger: true });
   const sessions = new Map<string, string>();
@@ -39,6 +46,10 @@ export async function createApp(databasePath = 'data/retromania.sqlite') {
   }
   registerStageRoutes(app, db, authorized, changed);
   registerDrawRoutes(app, db, authorized, changed);
+  registerStationRoutes(app, db, authorized, changed);
+  registerLeaderboardRoutes(app, db);
+  registerForfeitRoutes(app, db, authorized, changed);
+  registerBackupRoutes(app, db, authorized, changed);
   app.get('/api/status', async () => ({ status: 'ok' }));
   app.get('/ws', { websocket: true }, socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); socket.send(JSON.stringify({ status: 'ok' })); });
   app.get('/api/tournaments', async () => db.prepare('SELECT id, name FROM tournaments ORDER BY rowid DESC').all());
@@ -76,6 +87,7 @@ export async function createApp(databasePath = 'data/retromania.sqlite') {
   app.delete<{ Params: { id: string; participantId: string } }>('/api/tournaments/:id/participants/:participantId', async (request, reply) => {
     const { id, participantId } = request.params;
     if (!authorized(request.headers.authorization, id)) return reply.code(401).send({ error: 'Administrator access required.' });
+    if (db.prepare('SELECT 1 FROM stages WHERE tournament_id = ? AND (EXISTS (SELECT 1 FROM attempts WHERE stage_id = stages.id) OR EXISTS (SELECT 1 FROM stage_forfeits WHERE stage_id = stages.id)) LIMIT 1').get(id)) return reply.code(409).send({ error: 'Participants cannot be removed after results are entered. Withdrawal is not available yet.' });
     const result = db.prepare('DELETE FROM participants WHERE id = ? AND tournament_id = ?').run(participantId, id);
     if (!result.changes) return reply.code(404).send({ error: 'Participant not found.' }); changed(id); return { ok: true };
   });

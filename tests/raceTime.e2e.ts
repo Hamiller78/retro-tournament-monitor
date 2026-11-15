@@ -1,0 +1,31 @@
+import { test, expect } from '@playwright/test';
+
+test('records and corrects racing times in minutes and seconds', async ({ page, request }) => {
+  const name = `Race ${Date.now()}`;
+  const created = await (await request.post('/api/tournaments', { data: { name, pin: '1234' } })).json();
+  const root = `/api/tournaments/${created.id}`;
+  const headers = { Authorization: `Bearer ${created.token}` };
+  await request.post(`${root}/participants`, { headers, data: { displayName: 'Racer' } });
+  const stage = await (await request.post(`${root}/stages`, { headers, data: { name: 'Race', kind: 'two-station', participantCount: null } })).json();
+  const base = `${root}/stages/${stage.id}`;
+  await request.put(`${base}/settings`, { headers, data: { stations: [{ games: [{ name: 'Racing', resultKind: 'time', higherIsBetter: false, attempts: 2 }] }, { games: [] }], points: [3, 2] } });
+  const draw = await (await request.post(`${base}/stations/0/spin`)).json();
+  await request.post(`${base}/stations/0/confirm`, { data: { drawId: draw.drawId } });
+  await page.goto('/'); await page.getByRole('button', { name, exact: true }).click();
+  await page.getByRole('button', { name: 'Station 1', exact: true }).click();
+  await page.getByRole('button', { name: 'Take control' }).click();
+  await page.getByRole('button', { name: 'Select Racer' }).click();
+  await page.getByLabel('Time (mm:ss)').fill('01:75');
+  await page.getByRole('button', { name: 'Save attempt' }).click();
+  await expect(page.getByRole('alert')).toContainText('minutes:seconds');
+  await page.getByLabel('Time (mm:ss)').fill('01:23,45');
+  await page.getByRole('button', { name: 'Save attempt' }).click();
+  await expect(page.getByText('01:23.45').first()).toBeVisible();
+  await page.getByRole('button', { name: 'Setup', exact: true }).click();
+  await page.getByLabel('Administrator PIN', { exact: true }).last().fill('1234');
+  await page.getByRole('button', { name: 'Unlock setup' }).click();
+  await page.getByRole('button', { name: 'Station 1', exact: true }).click();
+  page.once('dialog', dialog => dialog.accept('01:10.25'));
+  await page.getByRole('button', { name: 'Edit Racer attempt 1' }).click();
+  await expect(page.getByText('01:10.25').first()).toBeVisible();
+});

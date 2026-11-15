@@ -38,7 +38,7 @@ A **final** is the role of the concluding stage, not a separate fixed format. It
 - What are the precise relationships between tournament withdrawal, stage forfeiture, reactivation, and reopening? In particular, how does reactivation interact with an automatically applied forfeit?
 - How are forfeited participants ordered among themselves, and where is the optional real name visible?
 - When an active scoring stage can accept a replacement, what are the exact eligibility and shortfall rules? Already active simultaneous semifinals and finals cannot add replacements. Detailed vacancy and bye behavior is also open.
-- How are time values represented and validated, and what should happen when a wheel pool has no eligible different game?
+- Racing times are entered and displayed as minutes and seconds (mm:ss), with optional fractional seconds; existing numeric values remain stored in seconds. What should happen when a wheel pool has no eligible different game remains open.
 - How should the app behave through disconnection, reconnection, conflicting entries, and recovery? See [architecture](architecture.md).
 
 These questions do not require building the application now. No storage layout, API, or screen design is prescribed by this draft.

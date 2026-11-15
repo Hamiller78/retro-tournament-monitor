@@ -26,6 +26,7 @@ export function registerStageRoutes(app: FastifyInstance, db: DatabaseSync, auth
   app.put<{ Params: Params; Body: Body }>('/api/tournaments/:id/stages/:stageId', async (request, reply) => {
     const { id, stageId } = request.params;
     if (!authorized(request.headers.authorization, id)) return reply.code(401).send({ error: 'Administrator access required.' });
+    if (db.prepare('SELECT 1 FROM stages WHERE id = ? AND (EXISTS (SELECT 1 FROM attempts WHERE stage_id = stages.id) OR EXISTS (SELECT 1 FROM stage_forfeits WHERE stage_id = stages.id))').get(stageId)) return reply.code(409).send({ error: 'Stage settings cannot change after results have been entered.' });
     const stage = validate(request.body);
     if (!stage) return reply.code(400).send({ error: 'Enter a stage name, format, and a valid participant count.' });
     const existing = db.prepare('SELECT kind FROM stages WHERE id = ? AND tournament_id = ?').get(stageId, id);
@@ -38,6 +39,7 @@ export function registerStageRoutes(app: FastifyInstance, db: DatabaseSync, auth
   app.delete<{ Params: Params }>('/api/tournaments/:id/stages/:stageId', async (request, reply) => {
     const { id, stageId } = request.params;
     if (!authorized(request.headers.authorization, id)) return reply.code(401).send({ error: 'Administrator access required.' });
+    if (db.prepare('SELECT 1 FROM stages WHERE id = ? AND (EXISTS (SELECT 1 FROM attempts WHERE stage_id = stages.id) OR EXISTS (SELECT 1 FROM stage_forfeits WHERE stage_id = stages.id))').get(stageId)) return reply.code(409).send({ error: 'A stage with results cannot be removed.' });
     const result = db.prepare('DELETE FROM stages WHERE id = ? AND tournament_id = ?').run(stageId, id);
     if (!result.changes) return reply.code(404).send({ error: 'Stage not found.' });
     changed(id); return { ok: true };
@@ -45,6 +47,7 @@ export function registerStageRoutes(app: FastifyInstance, db: DatabaseSync, auth
   app.put<{ Params: Params; Body: unknown }>('/api/tournaments/:id/stages/:stageId/settings', async (request, reply) => {
     const { id, stageId } = request.params;
     if (!authorized(request.headers.authorization, id)) return reply.code(401).send({ error: 'Administrator access required.' });
+    if (db.prepare('SELECT 1 FROM stages WHERE id = ? AND (EXISTS (SELECT 1 FROM attempts WHERE stage_id = stages.id) OR EXISTS (SELECT 1 FROM stage_forfeits WHERE stage_id = stages.id))').get(stageId)) return reply.code(409).send({ error: 'Stage settings cannot change after results have been entered.' });
     const stage = db.prepare('SELECT kind FROM stages WHERE id = ? AND tournament_id = ?').get(stageId, id);
     if (!stage) return reply.code(404).send({ error: 'Stage not found.' });
     const value = request.body;

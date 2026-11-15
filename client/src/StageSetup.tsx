@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import type { Stage, StageKind } from '../../shared/contracts';
+import type { Stage, StageKind, StageSettings } from '../../shared/contracts';
 import { StageSettingsEditor } from './StageSettingsEditor';
 
 const formats: Record<StageKind, string> = { 'two-station': 'Two-station ranking', elimination: 'Multiplayer elimination', duel: 'Fighting duel', 'tie-breaker': 'Tie-breaker' };
@@ -7,8 +7,8 @@ const input = 'w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 
 const button = 'rounded-lg bg-violet-600 px-4 py-2 font-semibold text-white hover:bg-violet-500';
 const secondary = 'rounded-lg border border-slate-600 px-3 py-2 text-sm hover:bg-slate-800 disabled:opacity-40';
 
-type Props = { tournamentId: string; stages: Stage[]; token: string; onChange: () => void; onError: (error: string) => void };
-export function StageSetup({ tournamentId, stages, token, onChange, onError }: Props) {
+type Props = { tournamentId: string; stages: Stage[]; token: string; onChange: () => void; onSettingsSaved: (stageId: string, settings: StageSettings) => void; onError: (error: string) => void };
+export function StageSetup({ tournamentId, stages, token, onChange, onSettingsSaved, onError }: Props) {
   const [name, setName] = useState('');
   const [kind, setKind] = useState<StageKind>('two-station');
   const [count, setCount] = useState('');
@@ -37,7 +37,7 @@ export function StageSetup({ tournamentId, stages, token, onChange, onError }: P
     <h3 id="stages-heading" className="text-xl font-bold">Stages <span className="text-slate-400">({stages.length})</span></h3>
     <p className="mt-1 text-sm text-slate-400">Arrange your stages in playing order. Set up games and scoring for each stage.</p>
     {stages.length === 0 ? <p className="mt-3 text-slate-400">No stages yet.</p> : <ol className="mt-3 divide-y divide-slate-700">{stages.map((stage, index) => <li key={stage.id} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><span className="font-semibold">{index + 1}. {stage.name}</span><p className="text-sm text-slate-400">{formats[stage.kind]} · {stage.participantCount === null ? 'Player count not set' : `${stage.participantCount} players`}{stage.kind === 'tie-breaker' ? ' · Conditional' : ''}</p></div>{token && <div className="flex flex-wrap gap-2"><button type="button" className={secondary} disabled={busy || index === 0} onClick={() => void request(`/${stage.id}/move`, 'POST', { direction: 'up' })} aria-label={`Move ${stage.name} up`}>↑</button><button type="button" className={secondary} disabled={busy || index === stages.length - 1} onClick={() => void request(`/${stage.id}/move`, 'POST', { direction: 'down' })} aria-label={`Move ${stage.name} down`}>↓</button><button type="button" className={secondary} onClick={() => setConfiguring(stage.id)}>Game settings <span className="sr-only">{stage.name}</span></button><button type="button" className={secondary} onClick={() => edit(stage)}>Edit <span className="sr-only">{stage.name}</span></button><button type="button" className={secondary} disabled={busy} onClick={() => void remove(stage)}>Remove <span className="sr-only">{stage.name}</span></button></div>}</li>)}</ol>}
-    {token && stages.find(stage => stage.id === configuring) && <StageSettingsEditor key={configuring} stage={stages.find(stage => stage.id === configuring)!} tournamentId={tournamentId} token={token} onChange={onChange} onError={onError} onClose={() => setConfiguring('')} />}
+    {token && stages.find(stage => stage.id === configuring) && <StageSettingsEditor key={configuring} stage={stages.find(stage => stage.id === configuring)!} tournamentId={tournamentId} token={token} onChange={onChange} onSaved={onSettingsSaved} onError={onError} onClose={() => setConfiguring('')} />}
     {token && <form onSubmit={save} className="mt-5 space-y-3 border-t border-slate-700 pt-5"><h4 className="font-semibold">{editing ? 'Edit stage' : 'Add stage'}</h4><div className="grid gap-3 sm:grid-cols-2"><label className="text-sm">Stage name<input className={input} value={name} onChange={event => setName(event.target.value)} maxLength={100} required /></label><label className="text-sm">Stage format<select className={input} value={kind} onChange={event => setKind(event.target.value as StageKind)}>{Object.entries(formats).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label><label className="text-sm">Number of players (optional)<input className={input} type="number" min="1" max="999" step="1" value={count} onChange={event => setCount(event.target.value)} /></label></div><div className="flex gap-2"><button className={button} disabled={busy}>{editing ? 'Save stage' : 'Add stage'}</button>{editing && <button type="button" className={secondary} onClick={reset}>Cancel stage edit</button>}</div></form>}
   </section>;
 }

@@ -40,6 +40,8 @@ export function registerDrawRoutes(app: FastifyInstance, db: DatabaseSync, autho
     if (!authorized(request.headers.authorization, id)) return reply.code(401).send({ error: 'Administrator access required.' });
     if (raw !== '0' && raw !== '1') return reply.code(400).send({ error: 'Invalid station.' });
     if (!stageData(id, stageId)) return reply.code(404).send({ error: 'Stage not found.' });
+    if (db.prepare('SELECT 1 FROM attempts WHERE stage_id = ? AND station = ?').get(stageId, Number(raw))) return reply.code(409).send({ error: 'A game cannot be unlocked after results have been entered.' });
+    db.prepare('DELETE FROM station_sessions WHERE stage_id = ? AND station = ?').run(stageId, Number(raw));
     db.prepare('DELETE FROM station_draws WHERE stage_id = ? AND station = ?').run(stageId, Number(raw)); changed(id); return { ok: true };
   });
 }

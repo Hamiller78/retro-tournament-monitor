@@ -1,6 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { Tournament } from '../../shared/contracts';
 import { GameWheel } from './GameWheel';
+import { StationView } from './StationView';
+import { LeaderboardView } from './LeaderboardView';
 
 type View = 'setup' | 'wheel1' | 'wheel2' | 'station1' | 'station2' | 'leaderboard' | 'progression';
 const views: { id: View; label: string }[] = [
@@ -8,8 +10,8 @@ const views: { id: View; label: string }[] = [
   { id: 'station1', label: 'Station 1' }, { id: 'station2', label: 'Station 2' },
   { id: 'leaderboard', label: 'Leaderboard' }, { id: 'progression', label: 'Progression' },
 ];
-type Props = { tournament: Tournament; token: string; children: ReactNode; onError: (error: string) => void; onChange: () => void; onViewChange: (presentation: boolean) => void };
-export function TournamentViews({ tournament, token, children, onError, onChange, onViewChange }: Props) {
+type Props = { tournament: Tournament; token: string; children: ReactNode; onError: (error: string) => void; onChange: () => void; onViewChange: (presentation: boolean) => void; revision: number };
+export function TournamentViews({ tournament, token, children, onError, onChange, onViewChange, revision }: Props) {
   const [view, setView] = useState<View>('setup');
   const [drawStage, setDrawStage] = useState('');
   const [fullScreen, setFullScreen] = useState(Boolean(document.fullscreenElement));
@@ -31,8 +33,14 @@ export function TournamentViews({ tournament, token, children, onError, onChange
       {stages.length > 1 && <label className="mb-4 block text-sm">Round <select className="ml-2 rounded-lg bg-slate-800 px-3 py-2" value={stage?.id ?? ''} onChange={event => setDrawStage(event.target.value)}>{stages.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
       {stage ? <GameWheel key={`${stage.id}-${view}`} stage={stage} station={view === 'wheel1' ? 0 : 1} tournamentId={tournament.id} token={token} onError={onError} onChange={onChange} /> : <p className="p-6 text-slate-300">Add a two-station stage in Setup to use the wheels.</p>}
     </section>}
-    {(view === 'station1' || view === 'station2') && <section className="mt-6 min-h-[50vh]"><h3 className="text-3xl font-bold">Station {view === 'station1' ? 1 : 2}</h3><p className="mt-4 text-slate-300">Station rankings and result entry will be available here.</p></section>}
-    {view === 'leaderboard' && <section className="mt-6 min-h-[50vh]"><h3 className="text-3xl font-bold">Combined leaderboard</h3><p className="mt-4 text-slate-300">The combined rankings will be available here once result entry is implemented.</p></section>}
+    {(view === 'station1' || view === 'station2') && <section>
+      {stages.length > 1 && <label className="mt-4 block text-sm">Round <select className="ml-2 rounded-lg bg-slate-800 px-3 py-2" value={stage?.id ?? ''} onChange={event => setDrawStage(event.target.value)}>{stages.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
+      {stage ? <StationView key={`${stage.id}-${view}`} tournament={tournament} stage={stage} station={view === 'station1' ? 0 : 1} adminToken={token} revision={revision} onError={onError} onChange={onChange} /> : <p className="mt-6 text-slate-300">Add a two-station stage in Setup first.</p>}
+    </section>}
+    {view === 'leaderboard' && <section>
+      {stages.length > 1 && <label className="mt-4 block text-sm">Round <select className="ml-2 rounded-lg bg-slate-800 px-3 py-2" value={stage?.id ?? ''} onChange={event => setDrawStage(event.target.value)}>{stages.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
+      {stage ? <LeaderboardView key={stage.id} tournamentId={tournament.id} stageId={stage.id} revision={revision} /> : <p className="mt-6 text-slate-300">Add a two-station stage in Setup first.</p>}
+    </section>}
     {view === 'progression' && <section className="mt-6 min-h-[50vh]"><h3 className="text-3xl font-bold">Tournament progression</h3>{tournament.stages.length ? <ol className="mt-4 space-y-2">{tournament.stages.map((stage, index) => <li className="rounded-lg bg-slate-800 p-4 text-lg" key={stage.id}>{index + 1}. {stage.name}</li>)}</ol> : <p className="mt-4 text-slate-300">No stages configured yet.</p>}</section>}
   </>;
 }
