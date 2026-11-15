@@ -61,6 +61,17 @@ export function GameWheel({ stage, station, tournamentId, token, onError, onChan
     <h4 className="arcade-wheel-title text-lg font-bold">Station {station + 1}</h4>
     <div className="wheel-layout"><div className="wheel-shell mx-auto mt-4"><div className="wheel-pointer" aria-hidden="true"/><div ref={wheelRef} className={`wheel ${spinning ? 'wheel-spinning' : ''}`} style={{ background, transform: `rotate(${rotation}deg)` }} aria-hidden="true">{games.map((item, index) => <div className="wheel-label" key={`${index}-${item.name}`} style={{ transform: `translate(-100%, -50%) rotate(${(index + 0.5) * 360 / games.length - 270}deg)`, fontSize: `clamp(0.45rem, ${Math.max(0.9, Math.min(5.2, 65 / Math.max(item.name.length, 1), 70 / games.length))}cqw, 2.5rem)` }}><span>{item.name}</span></div>)}</div></div>
     <div className="wheel-info"><p className="wheel-result mt-4 min-h-8 text-center text-xl font-bold sm:text-2xl" aria-live="polite">{spinning ? 'Spinning…' : game ? `${draw?.confirmed ? 'Selected' : 'Drawn'}: ${game.name}` : games.length ? 'Ready to spin' : 'Add games to this station’s pool.'}</p>
+    {draw?.confirmed && game && <section className="game-info mt-5 rounded-lg border border-violet-500 bg-slate-900 p-4 text-left" aria-label="Selected game information">
+      <h5 className="game-info-heading font-bold text-cyan-200">ABOUT THE GAME</h5>
+      {game.developer?.trim() || game.platform?.trim() || game.releaseYear || game.description?.trim() ? <>
+        <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-lg">
+          {game.developer?.trim() && <><dt className="text-violet-300">Developer</dt><dd>{game.developer}</dd></>}
+          {game.platform?.trim() && <><dt className="text-violet-300">Platform</dt><dd>{game.platform}</dd></>}
+          {game.releaseYear && <><dt className="text-violet-300">Released</dt><dd>{game.releaseYear}</dd></>}
+        </dl>
+        {game.description?.trim() && <p className="game-description mt-3 whitespace-pre-wrap text-slate-100">{game.description}</p>}
+      </> : <p className="mt-2 text-slate-400">No game information added yet.</p>}
+    </section>}
     {games.length > 0 && <p className="mt-1 text-center text-xs text-slate-400">Games: {games.map(g => g.name).join(', ')}</p>}
     {<div className="wheel-controls mt-3 flex flex-wrap justify-center gap-2">{draw?.confirmed ? token && <button type="button" disabled={busy} onClick={() => void action('unlock')} className="rounded-lg border border-slate-600 px-3 py-2 text-sm disabled:opacity-50">Unlock game</button> : <><button type="button" disabled={busy || spinning || !games.length} onClick={() => void action('spin')} className="rounded-lg bg-violet-600 px-4 py-2 font-semibold disabled:opacity-50">{draw ? 'Spin again' : 'Spin'}</button>{draw && <button type="button" disabled={busy || spinning || !game} onClick={() => void action('confirm', { drawId: draw.drawId })} className="rounded-lg border border-emerald-600 px-3 py-2 disabled:opacity-50">Confirm game</button>}</>}</div>}</div></div>
   </section>;

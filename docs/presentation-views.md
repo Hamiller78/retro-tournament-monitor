@@ -20,8 +20,12 @@ When a final scoring stage, elimination, duel, or deciding tie-breaker reaches i
 
 ## Visual direction
 
-The user prefers a colorful 8-bit arcade look with pixel styling. The rankings can resemble an arcade high-score list. Specific games or machines are not required as references. The user also likes blinking text and animated lights. Use motion for decorative accents, keep tournament information readable, and respect reduced-motion preferences.
+The user prefers a colorful 8-bit arcade look with pixel styling. The rankings can resemble an arcade high-score list. Specific games or machines are not required as references. The user also likes blinking text and animated lights, including colors that travel around the wheel and along the display. Use motion for decorative accents, keep tournament information readable, and respect reduced-motion preferences.
 
 ## Sound
 
 The user wants arcade sounds for the wheel and ranking updates. Sound is off by default, with a volume control on each device. The wheel ticks as its segments pass the marker and plays a short reveal; the combined leaderboard plays a brief cue when a new result changes its displayed standings. Browser restrictions may require sound to be enabled again after opening or refreshing a page.
+
+## Game information
+
+Each wheel game can optionally include a developer, platform, release year, and description. After a selection is confirmed, the wheel view shows the provided information next to the game. These details are configured per station pool and included in tournament backups.

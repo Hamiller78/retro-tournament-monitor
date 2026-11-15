@@ -6,6 +6,6 @@ export interface Stage { id: string; name: string; kind: StageKind; participantC
 export interface Tournament { id: string; name: string; isAdmin: boolean; stages: Stage[]; participants: Participant[] }
 export interface TournamentSummary { id: string; name: string }
 export type ResultKind = 'score' | 'time';
-export interface GameSettings { name: string; resultKind: ResultKind; higherIsBetter: boolean; attempts: number; players?: 1 | 2 }
+export interface GameSettings { name: string; resultKind: ResultKind; higherIsBetter: boolean; attempts: number; players?: 1 | 2; developer?: string; platform?: string; releaseYear?: number; description?: string }
 export interface StationSettings { games: GameSettings[] }
 export interface StageSettings { stations?: StationSettings[]; points?: number[]; game?: string; bestOf?: 1 | 3 | 5 }

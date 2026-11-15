@@ -14,6 +14,9 @@ describe('station draws', () => {
       const base = `/api/tournaments/${id}/stages`;
       const { id: stage } = (await app.inject({ method: 'POST', url: base, headers, payload: { name: 'First', kind: 'two-station', participantCount: null } })).json();
       const settings = { stations: [{ games: [{ name: 'Pong', resultKind: 'score', higherIsBetter: true, attempts: 1 }] }, { games: [{ name: 'Pong', resultKind: 'score', higherIsBetter: true, attempts: 1 }] }], points: [3, 2, 1] };
+      const invalid = structuredClone(settings);
+      Object.assign(invalid.stations[0].games[0], { releaseYear: 1.5 });
+      expect((await app.inject({ method: 'PUT', url: `${base}/${stage}/settings`, headers, payload: invalid })).statusCode).toBe(400);
       await app.inject({ method: 'PUT', url: `${base}/${stage}/settings`, headers, payload: settings });
       const first = `${base}/${stage}/stations/0`, second = `${base}/${stage}/stations/1`;
       expect((await app.inject({ method: 'POST', url: `${first}/spin` })).statusCode).toBe(200);

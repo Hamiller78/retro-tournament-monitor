@@ -5,7 +5,7 @@ import { z } from 'zod';
 
 const id = z.uuid();
 const name = z.string().trim().min(1).max(100);
-const game = z.object({ name, resultKind: z.enum(['score', 'time']), higherIsBetter: z.boolean(), attempts: z.number().int().min(1).max(100), players: z.union([z.literal(1), z.literal(2)]).optional() });
+const game = z.object({ name, resultKind: z.enum(['score', 'time']), higherIsBetter: z.boolean(), attempts: z.number().int().min(1).max(100), players: z.union([z.literal(1), z.literal(2)]).optional(), developer: z.string().max(100).optional(), platform: z.string().max(100).optional(), releaseYear: z.number().int().min(1).max(9999).optional(), description: z.string().max(1000).optional() });
 const settings = z.union([
   z.object({ stations: z.tuple([z.object({ games: z.array(game).max(100) }), z.object({ games: z.array(game).max(100) })]), points: z.array(z.number().int().min(0).max(1000000)).max(999) }),
   z.object({ game: z.string().max(100), bestOf: z.union([z.literal(1), z.literal(3), z.literal(5)]).optional() }),

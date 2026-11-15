@@ -11,7 +11,7 @@ describe('tournament backups', () => {
       const person = (await app.inject({ method: 'POST', url: `${root}/participants`, headers: admin, payload: { displayName: 'Racer', realName: 'Alex' } })).json().id;
       const stage = (await app.inject({ method: 'POST', url: `${root}/stages`, headers: admin, payload: { name: 'Round', kind: 'two-station', participantCount: null } })).json().id;
       const base = `${root}/stages/${stage}`, station = `${base}/stations/0`;
-      const settings = { stations: [{ games: [{ name: 'Race', resultKind: 'time', higherIsBetter: false, attempts: 2 }] }, { games: [] }], points: [5, 2] };
+      const settings = { stations: [{ games: [{ name: 'Race', resultKind: 'time', higherIsBetter: false, attempts: 2, developer: 'Arcade Studio', platform: 'Arcade', releaseYear: 1987, description: 'Race to the finish.' }] }, { games: [] }], points: [5, 2] };
       await app.inject({ method: 'PUT', url: `${base}/settings`, headers: admin, payload: settings });
       const draw = (await app.inject({ method: 'POST', url: `${station}/spin` })).json();
       await app.inject({ method: 'POST', url: `${station}/confirm`, payload: { drawId: draw.drawId } });
