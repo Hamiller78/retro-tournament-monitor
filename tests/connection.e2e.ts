@@ -61,18 +61,15 @@ test('creates a tournament and shares participant updates', async ({ browser, pa
   await expect(board.getByRole('row', { name: /Pixel Hero/ })).toContainText('12');
   await page.getByRole('button', { name: 'Station 1', exact: true }).click();
   await expect(page.getByText('4200').first()).toBeVisible();
-  page.once('dialog', dialog => dialog.accept());
   await page.getByRole('button', { name: 'Delete Pixel Hero attempt 2' }).click();
   await expect(spectator.getByText('1 of 2 attempts completed.')).toBeVisible();
   await expect(spectator.getByLabel('Score', { exact: true })).toBeVisible();
-  page.once('dialog', dialog => dialog.accept());
   await page.getByRole('button', { name: 'Forfeit Pixel Hero', exact: true }).click();
   await expect(spectator.getByText('Forfeited · saved results:')).toBeVisible();
   await expect(spectator.getByText('Now playing: —')).toBeVisible();
   await page.getByRole('button', { name: 'Leaderboard', exact: true }).click();
   await expect(page.getByRole('row', { name: /Pixel Hero/ })).toContainText('Forfeited');
   await page.getByRole('button', { name: 'Station 1', exact: true }).click();
-  page.once('dialog', dialog => dialog.accept());
   await page.getByRole('button', { name: 'Undo forfeit Pixel Hero', exact: true }).click();
   await expect(spectator.getByRole('button', { name: 'Select Pixel Hero' })).toBeVisible();
   await expect(spectator.getByText('4200').first()).toBeVisible();

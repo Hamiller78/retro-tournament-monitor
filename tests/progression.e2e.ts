@@ -30,7 +30,6 @@ test('closes a complete round and displays qualifiers in the next stage', async 
   await expect(semi.getByText('Active', { exact: true })).toBeVisible();
   await expect(semi.getByRole('listitem').filter({ hasText: /^Alice$/ })).toBeVisible();
   await expect(semi.getByText('Bob', { exact: true })).toHaveCount(0);
-  page.once('dialog', dialog => dialog.accept());
   await page.getByRole('button', { name: 'Reopen First round' }).click();
   await expect(page.getByText('First round reopened.')).toBeVisible();
   await expect(semi.getByText('Waiting for previous stage')).toBeVisible();

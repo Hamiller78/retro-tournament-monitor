@@ -25,7 +25,8 @@ test('records and corrects racing times in minutes and seconds', async ({ page, 
   await page.getByLabel('Administrator PIN', { exact: true }).last().fill('1234');
   await page.getByRole('button', { name: 'Unlock setup' }).click();
   await page.getByRole('button', { name: 'Station 1', exact: true }).click();
-  page.once('dialog', dialog => dialog.accept('01:10.25'));
   await page.getByRole('button', { name: 'Edit Racer attempt 1' }).click();
+  await page.getByLabel('Correct time (mm:ss)').fill('01:10.25');
+  await page.getByRole('button', { name: 'Save correction' }).click();
   await expect(page.getByText('01:10.25').first()).toBeVisible();
 });

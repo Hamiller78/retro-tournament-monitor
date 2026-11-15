@@ -1,5 +1,6 @@
 @import "tailwindcss";
 
+
 .wheel-shell { position: relative; width: min(68vh, 78vw, 42rem); aspect-ratio: 1; }
 .wheel { position: absolute; inset: 0; border: 5px solid #e2e8f0; border-radius: 50%; overflow: hidden; }
 .wheel-spinning { transition: transform 3.2s cubic-bezier(.12,.65,.13,1); }
@@ -7,3 +8,90 @@
 .wheel-label { position: absolute; left: 50%; top: 50%; height: 48%; width: 38%; transform-origin: center bottom; text-align: center; padding-top: 0.6rem; font-size: clamp(0.7rem, 1.6vw, 1.25rem); line-height: 1.05; font-weight: 700; text-shadow: 0 1px 3px black; }
 .wheel-label span { display: block; overflow: hidden; max-height: 2.2em; overflow-wrap: anywhere; }
 @media (prefers-reduced-motion: reduce) { .wheel-spinning { transition: none; } }
+
+
+
+@font-face {
+  font-family: "Press Start 2P";
+  src: url("/fonts/PressStart2P-Regular.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+/* Arcade cabinet details are decorative; game data stays easy to read. */
+.arcade-app {
+  background-color: #08091c;
+  background-image: radial-gradient(ellipse at 50% -15%, #30205a 0, transparent 55%), linear-gradient(90deg, #09091e, #10102a 50%, #09091e);
+}
+.arcade-header {
+  position: relative;
+  padding: .6rem 0 1.3rem;
+  border-bottom: 3px solid #27d9ec;
+  box-shadow: 0 5px 0 #542380, 0 8px 22px #0bd1ec35;
+}
+.arcade-header::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 -11px;
+  height: 4px;
+  background: repeating-linear-gradient(90deg, #ffce4b 0 8px, transparent 8px 20px, #ff4ebf 20px 28px, transparent 28px 40px, #63f6e5 40px 48px, transparent 48px 60px);
+  animation: marquee-lights 2.4s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+.arcade-title, .score-kicker, .arcade-wheel-title, .arcade-winner-kicker {
+  font-family: "Press Start 2P", ui-monospace, monospace;
+  line-height: 1.5;
+}
+.arcade-title {
+  color: #ffde70;
+  font-size: clamp(1.25rem, 3vw, 2.25rem);
+  letter-spacing: -.04em;
+  text-shadow: 3px 3px 0 #e441aa, 6px 6px 0 #36237e;
+}
+.arcade-kicker { color: #6de9ec; letter-spacing: .2em; }
+.arcade-nav { border-color: #4b3278; }
+.arcade-nav button { border-radius: .25rem; transition: background-color .15s, box-shadow .15s; }
+.arcade-nav button[aria-current="page"] { background: #782acb; box-shadow: inset 0 -3px 0 #fa5cd7, 0 0 14px #bd4cff55; }
+.score-screen {
+  padding: clamp(1rem, 2.5vw, 2rem);
+  border: 3px solid #963ce7;
+  border-radius: .45rem;
+  background: linear-gradient(180deg, #171034, #0a1026 80%);
+  box-shadow: 0 0 0 4px #261554, 0 0 30px #ad43fd32;
+}
+.score-kicker { animation: score-blink 2.8s steps(2, end) infinite; color: #ffdc60; font-size: clamp(.65rem, 1.4vw, 1rem); text-shadow: 2px 2px #d53f9d; }
+.score-title { margin-top: .7rem; color: #fff; }
+.score-table { border-collapse: separate; border-spacing: 0 .25rem; font-variant-numeric: tabular-nums; }
+.score-table thead { color: #8beaf0; text-transform: uppercase; letter-spacing: .08em; }
+.score-table tbody tr { background-color: #161735; }
+.score-table tbody tr:nth-child(4n + 1) .score-player { color: #fff088; }
+.score-table tbody tr:nth-child(4n + 2) .score-player { color: #87f3ec; }
+.score-table tbody tr:nth-child(4n + 3) .score-player { color: #ffb1e4; }
+.score-table tbody tr:nth-child(4n) .score-player { color: #bfb2ff; }
+.score-table tbody tr.bg-emerald-950\/60 { background-color: #14352f; }
+.score-table tbody tr.bg-amber-950\/60 { background-color: #49310d; }
+.score-rank, .score-total { font-family: ui-monospace, monospace; font-weight: 800; }
+.score-rank { color: #ffe274; }
+.score-total { color: #fff088; }
+.arcade-wheel-panel { border-color: #9a47e4; box-shadow: inset 0 0 0 3px #2e1957, 0 0 22px #b345db2e; }
+.arcade-wheel-title { font-size: .8rem; color: #8df4ec; }
+.wheel { border-color: #ffe680; box-shadow: inset 0 0 0 3px #532568; }
+.wheel-shell { filter: drop-shadow(0 0 9px #e847c988); }
+.wheel-pointer { border-top-color: #ffe879; }
+.arcade-winner { border-radius: .5rem; border-color: #ffe36a; box-shadow: 0 0 0 5px #742cb3, 0 0 0 10px #2ce1e1, 0 0 55px #eb45c777; }
+.arcade-winner-kicker { font-size: clamp(.55rem, 1.8vw, .85rem); line-height: 1.8; animation: champion-light 2.4s ease-in-out infinite alternate; }
+@keyframes score-blink { 50% { opacity: .45; } }
+@keyframes marquee-lights { from { opacity: .55; filter: brightness(.9); } to { opacity: 1; filter: brightness(1.3); } }
+@keyframes champion-light { from { color: #ffe374; text-shadow: 0 0 2px #ffcb3e; } to { color: #fff2b2; text-shadow: 0 0 14px #ffb627; } }
+@media (prefers-reduced-motion: reduce) {
+  .arcade-header::after, .arcade-winner-kicker, .score-kicker { animation: none; }
+  .arcade-nav button { transition: none; }
+}
+
+@media (max-width: 600px) {
+  .score-table { font-size: .85rem; }
+  .score-table th { padding: .45rem .2rem; font-size: .6rem; letter-spacing: 0; }
+  .score-table td { padding: .55rem .2rem; }
+  .score-player span { display: block; margin-left: 0; font-size: .68rem; }
+}

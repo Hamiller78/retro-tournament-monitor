@@ -14,6 +14,10 @@ test('records paired and solo racing attempts with independent counts', async ({
   await page.getByRole('button', { name: 'Take control' }).click();
   await page.getByRole('button', { name: 'Select Alice' }).click();
   await page.getByLabel('Time (mm:ss)', { exact: true }).fill('01:30');
+  await page.getByRole('button', { name: 'Select Bob' }).click();
+  await expect(page.getByLabel('Time (mm:ss) — Alice')).toHaveValue('01:30');
+  await page.getByRole('button', { name: 'Remove Bob' }).click();
+  await expect(page.getByLabel('Time (mm:ss)', { exact: true })).toHaveValue('01:30');
   await page.getByRole('button', { name: 'Save attempt', exact: true }).click();
   await expect(page.getByText('1 of 2 attempts completed.')).toBeVisible();
   await page.getByRole('button', { name: 'Select Bob' }).click();

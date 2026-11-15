@@ -7,7 +7,6 @@ type StagePanelProps = SharedProps & { stage: Stage; index?: number; isFinal: bo
 export function StagePanel({ tournamentId, stage, index, isFinal, token, onError, onChange, revision }: StagePanelProps) {
   const [busy, setBusy] = useState(false); const [message, setMessage] = useState('');
   async function change(action: 'close' | 'reopen') {
-    if (action === 'reopen' && !confirm(`Reopen ${stage.name}? The next stage's assigned players will be cleared.`)) return;
     setBusy(true); onError(''); setMessage('');
     try {
       const response = await fetch(`/api/tournaments/${tournamentId}/stages/${stage.id}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: '{}' });

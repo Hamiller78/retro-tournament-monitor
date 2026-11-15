@@ -36,11 +36,11 @@ export function GameWheel({ stage, station, tournamentId, token, onError, onChan
     } catch (error) { onError((error as Error).message); } finally { setBusy(false); }
   }
   const background = games.length ? `conic-gradient(${games.map((_, index) => `${colors[index % colors.length]} ${index * 100 / games.length}% ${(index + 1) * 100 / games.length}%`).join(', ')})` : '#334155';
-  return <section aria-label={`Station ${station + 1} wheel`} className="rounded-xl border border-slate-700 bg-slate-950 p-4">
-    <h4 className="text-lg font-bold">Station {station + 1}</h4>
+  return <section aria-label={`Station ${station + 1} wheel`} className="arcade-wheel-panel rounded-xl border border-slate-700 bg-slate-950 p-4">
+    <h4 className="arcade-wheel-title text-lg font-bold">Station {station + 1}</h4>
     <div className="wheel-shell mx-auto mt-4"><div className="wheel-pointer" aria-hidden="true"/><div className={`wheel ${spinning ? 'wheel-spinning' : ''}`} style={{ background, transform: `rotate(${rotation}deg)` }} aria-hidden="true">{games.map((item, index) => <div className="wheel-label" key={`${index}-${item.name}`} style={{ transform: `translate(-50%, -100%) rotate(${(index + 0.5) * 360 / games.length}deg)` }}><span>{item.name}</span></div>)}</div></div>
     <p className="mt-4 min-h-8 text-center text-xl font-bold sm:text-2xl" aria-live="polite">{spinning ? 'Spinning…' : game ? `${draw?.confirmed ? 'Selected' : 'Drawn'}: ${game.name}` : games.length ? 'Ready to spin' : 'Add games to this station’s pool.'}</p>
     {games.length > 0 && <p className="mt-1 text-center text-xs text-slate-400">Games: {games.map(g => g.name).join(', ')}</p>}
     {<div className="mt-3 flex flex-wrap justify-center gap-2">{draw?.confirmed ? token && <button type="button" disabled={busy} onClick={() => void action('unlock')} className="rounded-lg border border-slate-600 px-3 py-2 text-sm disabled:opacity-50">Unlock game</button> : <><button type="button" disabled={busy || spinning || !games.length} onClick={() => void action('spin')} className="rounded-lg bg-violet-600 px-4 py-2 font-semibold disabled:opacity-50">{draw ? 'Spin again' : 'Spin'}</button>{draw && <button type="button" disabled={busy || spinning || !game} onClick={() => void action('confirm', { drawId: draw.drawId })} className="rounded-lg border border-emerald-600 px-3 py-2 disabled:opacity-50">Confirm game</button>}</>}</div>}
   </section>;
-}
+}

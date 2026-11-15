@@ -19,7 +19,7 @@ export function StageSetup({ tournamentId, stages, token, onChange, onSettingsSa
   async function request(path: string, method: string, body?: object) {
     setBusy(true); onError('');
     try {
-      const response = await fetch(`/api/tournaments/${tournamentId}/stages${path}`, { method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, ...(body ? { body: JSON.stringify(body) } : {}) });
+      const response = await fetch(`/api/tournaments/${tournamentId}/stages${path}`, { method, headers: { ...(body ? { 'Content-Type': 'application/json' } : {}), Authorization: `Bearer ${token}` }, ...(body ? { body: JSON.stringify(body) } : {}) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Could not save stage.');
       onChange(); return true;
@@ -27,12 +27,10 @@ export function StageSetup({ tournamentId, stages, token, onChange, onSettingsSa
   }
   async function save(event: FormEvent) {
     event.preventDefault();
-    const original = stages.find(stage => stage.id === editing);
-    if (original && original.kind !== kind && original.settings && !confirm('Changing the stage format will clear its game settings. Continue?')) return;
     if (await request(editing ? `/${editing}` : '', editing ? 'PUT' : 'POST', { name, kind, participantCount: count === '' ? null : Number(count) })) reset();
   }
   function edit(stage: Stage) { setEditing(stage.id); setName(stage.name); setKind(stage.kind); setCount(stage.participantCount === null ? '' : String(stage.participantCount)); }
-  async function remove(stage: Stage) { if (confirm(`Remove stage ${stage.name}?`) && await request(`/${stage.id}`, 'DELETE') && editing === stage.id) reset(); }
+  async function remove(stage: Stage) { if (await request(`/${stage.id}`, 'DELETE') && editing === stage.id) reset(); }
   return <section className="mt-8 border-t border-slate-700 pt-6" aria-labelledby="stages-heading">
     <h3 id="stages-heading" className="text-xl font-bold">Stages <span className="text-slate-400">({stages.length})</span></h3>
     <p className="mt-1 text-sm text-slate-400">Arrange your stages in playing order. Set up games and scoring for each stage.</p>

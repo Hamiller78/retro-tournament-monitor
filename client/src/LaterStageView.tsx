@@ -30,16 +30,15 @@ export function LaterStageView({ tournamentId, stage, token, revision, onError, 
     catch (error) { onError((error as Error).message); } finally { setBusy(false); }
   }
   async function remove(id: string) {
-    if (!confirm('Delete this result?')) return;
     setBusy(true); onError('');
     try { const response = await fetch(`${base}/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }); const result = await response.json(); if (!response.ok) throw new Error(result.error || 'Could not delete result.'); onChange(); }
     catch (error) { onError((error as Error).message); } finally { setBusy(false); }
   }
-  if (!outcome) return <p className="mt-3 text-sm text-slate-400">Loading stage results…</p>;
+  if (!outcome) return <p className="mt-3 text-sm text-slate-400">Loading stage resultsâ€¦</p>;
   const names = new Map(outcome.entrants.map(person => [person.id, person.displayName]));
   const eliminated = new Set(outcome.kind === 'elimination' ? outcome.results.map(result => result.participantId) : []);
   return <div className="mt-4 border-t border-slate-700 pt-4" aria-label={`${stage.name} results`}>
-    <p className="text-slate-300">{outcome.game || 'Game not set'}{outcome.kind === 'duel' && outcome.bestOf ? ` · ${outcome.bestOf === 1 ? 'Single match' : `Best of ${outcome.bestOf}`}` : ''}</p>
+    <p className="text-slate-300">{outcome.game || 'Game not set'}{outcome.kind === 'duel' && outcome.bestOf ? ` Â· ${outcome.bestOf === 1 ? 'Single match' : `Best of ${outcome.bestOf}`}` : ''}</p>
     {outcome.kind === 'tie-breaker' ? <>
       <p className="mt-3 font-semibold">{outcome.blockedReason ?? (!outcome.needsTie ? 'No tie-breaker is needed now. Close this stage to advance.' : outcome.complete ? 'Tie-breaker order' : outcome.eligibleIds?.length === 2 ? 'Choose the winner' : 'Enter the finishing order')}</p>
       <ul className="mt-2 flex flex-wrap gap-2">{(outcome.complete ? outcome.ranking.map(id => outcome.entrants.find(person => person.id === id)!) : outcome.entrants.filter(person => outcome.eligibleIds?.includes(person.id) && !outcome.results.some(result => result.participantId === person.id))).map((person, index) => <li key={person.id} className="rounded-lg bg-slate-700 px-3 py-2">{outcome.complete ? `${index + 1}. ` : ''}{person.displayName}{stage.status === 'active' && !outcome.complete && !outcome.blockedReason && <button type="button" className="ml-3 rounded border border-slate-400 px-2 py-1 text-sm disabled:opacity-50" disabled={busy} onClick={() => void record(person.id)}>{outcome.eligibleIds?.length === 2 ? 'Winner' : 'Place next'} <span className="sr-only">{person.displayName}</span></button>}</li>)}</ul>
@@ -49,7 +48,7 @@ export function LaterStageView({ tournamentId, stage, token, revision, onError, 
       <ul className="mt-2 flex flex-wrap gap-2">{(outcome.complete ? outcome.ranking.map(id => outcome.entrants.find(p => p.id === id)!) : outcome.entrants.filter(person => !person.withdrawn && !eliminated.has(person.id))).map((person, index) => <li key={person.id} className="rounded-lg bg-slate-700 px-3 py-2">{outcome.complete ? `${index + 1}. ` : ''}{person.displayName}{stage.status === 'active' && !outcome.complete && <button type="button" className="ml-3 rounded border border-slate-400 px-2 py-1 text-sm disabled:opacity-50" disabled={busy} onClick={() => void record(person.id)}>Eliminate <span className="sr-only">{person.displayName}</span></button>}</li>)}</ul>
       <p className="mt-4 text-sm text-slate-400">Elimination order</p>
     </> : <>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">{outcome.entrants.map(person => <div key={person.id} className="rounded-lg bg-slate-700 p-4"><p className="text-xl font-semibold">{person.displayName}{person.withdrawn && ' � Withdrawn'}</p><p className="text-3xl font-bold">{outcome.results.filter(result => result.participantId === person.id).length}</p>{stage.status === 'active' && !outcome.complete && !person.withdrawn && <button type="button" className="mt-2 rounded-lg bg-violet-600 px-3 py-2 disabled:opacity-50" disabled={busy} onClick={() => void record(person.id)}>Round won <span className="sr-only">{person.displayName}</span></button>}</div>)}</div>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">{outcome.entrants.map(person => <div key={person.id} className="rounded-lg bg-slate-700 p-4"><p className="text-xl font-semibold">{person.displayName}{person.withdrawn && ' · Withdrawn'}</p><p className="text-3xl font-bold">{outcome.results.filter(result => result.participantId === person.id).length}</p>{stage.status === 'active' && !outcome.complete && !person.withdrawn && <button type="button" className="mt-2 rounded-lg bg-violet-600 px-3 py-2 disabled:opacity-50" disabled={busy} onClick={() => void record(person.id)}>Round won <span className="sr-only">{person.displayName}</span></button>}</div>)}</div>
       <p className="mt-4 text-sm text-slate-400">Rounds</p>
     </>}
     {outcome.kind === 'elimination' && outcome.entrants.some(person => person.withdrawn) && <p className="mt-3 text-sm text-amber-300">Withdrawn: {outcome.entrants.filter(person => person.withdrawn).map(person => person.displayName).join(', ')}</p>}
