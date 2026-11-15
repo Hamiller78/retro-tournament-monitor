@@ -59,7 +59,10 @@ test('creates a tournament and shares participant updates', async ({ browser, pa
   await spectator.getByRole('button', { name: 'Take control' }).click();
   await spectator.getByRole('button', { name: 'Select Pixel Hero' }).click();
   await page.getByRole('button', { name: 'Leaderboard', exact: true }).click();
-  await expect(page.getByRole('region', { name: 'Combined leaderboard' }).getByText('Now playing: Pixel Hero')).toBeVisible();
+  const emptyBoard = page.getByRole('region', { name: 'Combined leaderboard' });
+  await expect(emptyBoard.getByText('Now playing: Pixel Hero')).toBeVisible();
+  await expect(emptyBoard.getByText('Now playing: —', { exact: true })).toBeVisible();
+  await expect(emptyBoard.getByRole('row', { name: /Pixel Hero/ }).getByText('—', { exact: true })).toHaveCount(4);
   await spectator.getByLabel('Score', { exact: true }).fill('4200');
   await spectator.getByRole('button', { name: 'Save attempt' }).click();
   await expect(spectator.getByText('4200').first()).toBeVisible();
