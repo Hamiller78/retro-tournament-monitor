@@ -1,0 +1,34 @@
+import { test, expect } from '@playwright/test';
+
+test('records paired and solo racing attempts with independent counts', async ({ page, browser, request }) => {
+  const name = `Pairs ${Date.now()}`;
+  const created = await (await request.post('/api/tournaments', { data: { name, pin: '1234' } })).json();
+  const root = `/api/tournaments/${created.id}`, headers = { Authorization: `Bearer ${created.token}` };
+  for (const displayName of ['Alice', 'Bob']) await request.post(`${root}/participants`, { headers, data: { displayName } });
+  const stage = await (await request.post(`${root}/stages`, { headers, data: { name: 'Race', kind: 'two-station', participantCount: null } })).json();
+  const base = `${root}/stages/${stage.id}`;
+  await request.put(`${base}/settings`, { headers, data: { stations: [{ games: [{ name: 'Racing', resultKind: 'time', higherIsBetter: false, attempts: 2, players: 2 }] }, { games: [] }], points: [3, 2] } });
+  const draw = await (await request.post(`${base}/stations/0/spin`)).json(); await request.post(`${base}/stations/0/confirm`, { data: { drawId: draw.drawId } });
+  await page.goto('/'); await page.getByRole('button', { name, exact: true }).click();
+  await page.getByRole('button', { name: 'Station 1', exact: true }).click();
+  await page.getByRole('button', { name: 'Take control' }).click();
+  await page.getByRole('button', { name: 'Select Alice' }).click();
+  await page.getByLabel('Time (mm:ss)', { exact: true }).fill('01:30');
+  await page.getByRole('button', { name: 'Save attempt', exact: true }).click();
+  await expect(page.getByText('1 of 2 attempts completed.')).toBeVisible();
+  await page.getByRole('button', { name: 'Select Bob' }).click();
+  await expect(page.getByText('Now playing: Alice & Bob')).toBeVisible();
+  const monitor = await browser.newPage(); await monitor.goto('/'); await monitor.getByRole('button', { name, exact: true }).click();
+  await monitor.getByRole('button', { name: 'Leaderboard', exact: true }).click();
+  await expect(monitor.getByText('Now playing: Alice & Bob')).toBeVisible();
+  await page.getByLabel('Time (mm:ss) — Alice').fill('01:20');
+  await page.getByLabel('Time (mm:ss) — Bob').fill('01:25');
+  await page.getByRole('button', { name: 'Save attempts' }).click();
+  await expect(page.getByText('All attempts completed for Alice.')).toBeVisible();
+  await expect(page.getByText('Bob: 1 of 2 attempts completed.')).toBeVisible();
+  await page.getByLabel('Time (mm:ss)', { exact: true }).fill('01:10');
+  await page.getByRole('button', { name: 'Save attempt', exact: true }).click();
+  await expect(page.getByText('All attempts completed for Bob.')).toBeVisible();
+  await expect(monitor.getByRole('row', { name: /Bob/ })).toContainText('3');
+  await monitor.close();
+});

@@ -1,6 +1,6 @@
 # Retromania
 
-A local-network retro tournament monitor. Tournament creation, participant and stage setup, game wheels, and station attempt entry with individual rankings are available. Preliminary combined standings and reversible forfeits for a two-station stage are available. Manual backup and separate-copy restore are available. Tournament-wide withdrawal, stage completion, automatic stage-close backups, and tournament progression are not implemented yet.
+A local-network retro tournament monitor. Tournament creation, participant and stage setup, game wheels, and station attempt entry with individual rankings are available. Station games support one or two simultaneous recorded players, including a single recorded player in a two-player game. Preliminary combined standings and reversible forfeits for a two-station stage are available. Manual backup and separate-copy restore are available. Two-station stages can advance players to elimination and fighting-duel stages, with automatic local backups on closure. A configured tie-breaker resolves ties at an advancement cutoff and automatically passes the qualifiers on. Administrators can withdraw and reactivate players during an active stage; saved results remain available. Eligible replacements are added to later scoring stages when they can be determined. Tie-breakers adapt when withdrawals change the qualifying tie.
 
 ## Run locally
 

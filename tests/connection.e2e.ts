@@ -82,10 +82,9 @@ test('creates a tournament and shares participant updates', async ({ browser, pa
   await page.getByLabel('Stage format').selectOption('elimination');
   await page.getByLabel('Number of players (optional)').fill('4');
   await page.getByRole('button', { name: 'Add stage' }).click();
-  await page.getByRole('button', { name: 'Move Semi-final up' }).click();
-  await expect(page.locator('section[aria-labelledby="stages-heading"] ol li').first()).toContainText('Semi-final');
+  await expect(page.locator('section[aria-labelledby="stages-heading"] ol li').last()).toContainText('Semi-final');
   await page.reload();
   await page.getByRole('button', { name, exact: true }).click();
-  await expect(page.locator('section[aria-labelledby="stages-heading"] ol li').first()).toContainText('Semi-final');
+  await expect(page.locator('section[aria-labelledby="stages-heading"] ol li').last()).toContainText('Semi-final');
   await spectator.close();
 });

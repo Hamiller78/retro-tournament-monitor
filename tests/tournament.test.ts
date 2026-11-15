@@ -15,7 +15,7 @@ describe('tournament setup', () => {
       expect((await app.inject({ method: 'POST', url, payload: { displayName: 'Ace' } })).statusCode).toBe(401);
       const added = await app.inject({ method: 'POST', url, headers: { authorization: `Bearer ${token}` }, payload: { displayName: 'Ace', realName: 'Alex' } });
       expect(added.statusCode).toBe(201);
-      expect((await app.inject({ method: 'GET', url: `/api/tournaments/${id}` })).json().participants).toEqual([{ id: added.json().id, displayName: 'Ace' }]);
+      expect((await app.inject({ method: 'GET', url: `/api/tournaments/${id}` })).json().participants).toEqual([{ id: added.json().id, displayName: 'Ace', withdrawn: false }]);
       expect((await app.inject({ method: 'GET', url: `/api/tournaments/${id}`, headers: { authorization: `Bearer ${token}` } })).json().participants[0].realName).toBe('Alex');
       await app.close(); app = await createApp(path);
       expect((await app.inject({ method: 'POST', url: `/api/tournaments/${id}/login`, payload: { pin: '0000' } })).statusCode).toBe(401);

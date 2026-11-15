@@ -1,0 +1,66 @@
+import { test, expect } from '@playwright/test';
+import { randomUUID } from 'node:crypto';
+
+test('plays an elimination semifinal and a best-of-three final', async ({ page, request, browser }) => {
+  const name = `Final ${Date.now()}`;
+  const created = await (await request.post('/api/tournaments', { data: { name, pin: '1234' } })).json();
+  const root = `/api/tournaments/${created.id}`, headers = { Authorization: `Bearer ${created.token}` };
+  const players: string[] = [];
+  for (const displayName of ['Alice', 'Bob']) players.push((await (await request.post(`${root}/participants`, { headers, data: { displayName } })).json()).id);
+  const stage = async (label: string, kind: string, participantCount: number) => (await (await request.post(`${root}/stages`, { headers, data: { name: label, kind, participantCount } })).json()).id;
+  const first = await stage('First round', 'two-station', 2), semi = await stage('Semi-final', 'elimination', 2), final = await stage('Final', 'duel', 2);
+  const base = `${root}/stages/${first}`;
+  await request.put(`${base}/settings`, { headers, data: { stations: [{ games: [{ name: 'One', resultKind: 'score', higherIsBetter: true, attempts: 1 }] }, { games: [{ name: 'Two', resultKind: 'score', higherIsBetter: true, attempts: 1 }] }], points: [5, 2] } });
+  await request.put(`${root}/stages/${semi}/settings`, { headers, data: { game: 'Survival' } });
+  await request.put(`${root}/stages/${final}/settings`, { headers, data: { game: 'Fighter', bestOf: 3 } });
+  for (const number of [0, 1]) {
+    const station = `${base}/stations/${number}`, draw = await (await request.post(`${station}/spin`)).json(); await request.post(`${station}/confirm`, { data: { drawId: draw.drawId } });
+    const owner = { 'X-Station-Token': (await (await request.post(`${station}/claim`)).json()).token };
+    for (let i = 0; i < players.length; i++) { await request.put(`${station}/active`, { headers: owner, data: { participantIds: [players[i]] } }); await request.post(`${station}/attempts/batch`, { headers: owner, data: { requestId: randomUUID(), results: [{ participantId: players[i], value: i === 0 ? 100 : 50 }] } }); }
+  }
+  expect((await request.post(`${base}/close`, { headers })).ok()).toBeTruthy();
+  await page.goto('/'); await page.getByRole('button', { name, exact: true }).click();
+  await page.getByLabel('Administrator PIN', { exact: true }).last().fill('1234'); await page.getByRole('button', { name: 'Unlock setup' }).click();
+  const monitor = await browser.newPage(); await monitor.goto('/'); await monitor.getByRole('button', { name, exact: true }).click();
+  await monitor.getByRole('navigation', { name: 'Tournament views' }).getByRole('button', { name: 'Final', exact: true }).click();
+  await expect(monitor.getByText('Waiting for previous stage')).toBeVisible();
+  await page.getByRole('navigation', { name: 'Tournament views' }).getByRole('button', { name: 'Semi-final', exact: true }).click();
+  await page.getByRole('button', { name: 'Eliminate Bob' }).click();
+  await expect(page.getByText('Winner: Alice')).toBeVisible();
+  await monitor.getByRole('navigation', { name: 'Tournament views' }).getByRole('button', { name: 'Semi-final', exact: true }).click();
+  await monitor.getByRole('button', { name: 'Close Semi-final' }).click();
+  await expect(monitor.getByText('Semi-final closed and players advanced.')).toBeVisible();
+  await monitor.getByRole('navigation', { name: 'Tournament views' }).getByRole('button', { name: 'Final', exact: true }).click();
+  await expect(monitor.getByRole('button', { name: 'Round won Alice' })).toBeVisible();
+  await monitor.getByRole('navigation', { name: 'Tournament views' }).getByRole('button', { name: 'Leaderboard', exact: true }).click();
+  await page.getByRole('navigation', { name: 'Tournament views' }).getByRole('button', { name: 'Final', exact: true }).click();
+  await page.getByRole('button', { name: 'Round won Alice' }).click();
+  await expect(page.getByLabel('Correct round 1')).toHaveValue(players[0]);
+  await page.getByRole('button', { name: 'Round won Bob' }).click();
+  await expect(page.getByLabel('Correct round 2')).toHaveValue(players[1]);
+  await page.getByLabel('Correct round 2').selectOption(players[0]);
+  await expect(page.getByLabel('Correct round 2')).toHaveValue(players[0]);
+  const earlyCelebration = page.getByRole('dialog', { name: 'We have a winner!' });
+  await expect(earlyCelebration.getByText('Alice', { exact: true })).toBeVisible();
+  await earlyCelebration.getByRole('button', { name: 'Continue' }).click();
+  await page.getByLabel('Correct round 2').selectOption(players[1]);
+  await expect(page.getByLabel('Correct round 2')).toHaveValue(players[1]);
+  await page.getByRole('button', { name: 'Round won Alice' }).click();
+  const celebration = page.getByRole('dialog', { name: 'We have a winner!' });
+  await expect(celebration.getByText('Alice', { exact: true })).toBeVisible();
+  const monitorCelebration = monitor.getByRole('dialog', { name: 'We have a winner!' });
+  await expect(monitorCelebration.getByText('Alice', { exact: true })).toBeVisible();
+  await celebration.getByRole('button', { name: 'Continue' }).click();
+  await monitorCelebration.getByRole('button', { name: 'Continue' }).click();
+  const finalSection = page.getByRole('region', { name: 'Final stage' });
+  await expect(finalSection.getByText('Winner: Alice')).toBeVisible();
+  await page.getByRole('button', { name: 'Progression', exact: true }).click();
+  await expect(page.getByText('3. Final', { exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'We have a winner!' })).toHaveCount(0);
+  await page.getByRole('navigation', { name: 'Tournament views' }).getByRole('button', { name: 'Final', exact: true }).click();
+  await page.getByRole('button', { name: 'Close Final' }).click();
+  await expect(page.getByText('Final closed. Tournament winner determined.')).toBeVisible();
+  await monitor.getByRole('navigation', { name: 'Tournament views' }).getByRole('button', { name: 'Final', exact: true }).click();
+  await expect(monitor.getByText('Winner: Alice')).toBeVisible();
+  await monitor.close();
+});

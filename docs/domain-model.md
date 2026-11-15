@@ -34,7 +34,7 @@ A **final** is the role of the concluding stage, not a separate fixed format. It
 
 ## Open design questions
 
-- How does a tie-breaker attach to a stage and supply its ordered outcome when several advancement places are contested?
+
 - What are the precise relationships between tournament withdrawal, stage forfeiture, reactivation, and reopening? In particular, how does reactivation interact with an automatically applied forfeit?
 - How are forfeited participants ordered among themselves, and where is the optional real name visible?
 - When an active scoring stage can accept a replacement, what are the exact eligibility and shortfall rules? Already active simultaneous semifinals and finals cannot add replacements. Detailed vacancy and bye behavior is also open.
