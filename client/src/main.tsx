@@ -11,6 +11,7 @@ import { StageSetup } from './StageSetup';
 import { TournamentViews } from './TournamentViews';
 
 import { DownloadBackup, RestoreBackup } from './BackupControls';
+import { SoundProvider } from './Sound';
 
 
 
@@ -152,7 +153,7 @@ function App() {
 
       <section className="rounded-2xl border border-slate-700 bg-slate-900 p-5 sm:p-6">{!tournament ? <div><h2 className="text-2xl font-bold">Get ready to play</h2><p className="mt-3 text-slate-300">Create or select a tournament to manage its participants.</p></div> : <>
 
-        <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-sm text-violet-300">{presentation ? "TOURNAMENT DISPLAY" : "TOURNAMENT SETUP"}</p><h2 className="text-2xl font-bold">{tournament.name}</h2></div>{token && <button className={secondaryClass} onClick={() => void logout()}>Log out</button>}</div>
+        <div className="tournament-heading flex flex-wrap items-start justify-between gap-3"><div><p className="text-sm text-violet-300">{presentation ? "TOURNAMENT DISPLAY" : "TOURNAMENT SETUP"}</p><h2 className="text-2xl font-bold">{tournament.name}</h2></div>{token && <button className={secondaryClass} onClick={() => void logout()}>Log out</button>}</div>
 
         <TournamentViews key={selected} tournament={tournament} token={token} onError={setError} onChange={() => setRevision(n => n + 1)} onViewChange={setPresentation} revision={revision}>
 
@@ -180,5 +181,5 @@ function App() {
 
 
 
-createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>);
+createRoot(document.getElementById('root')!).render(<StrictMode><SoundProvider><App /></SoundProvider></StrictMode>);
 

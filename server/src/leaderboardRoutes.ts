@@ -28,7 +28,8 @@ export function registerLeaderboardRoutes(app: FastifyInstance, db: DatabaseSync
     const link = nextProgress?.source_stage_id ? db.prepare('SELECT source_stage_id FROM tie_resolutions WHERE tie_stage_id = ?').get(String(nextProgress.source_stage_id)) : null;
     const settled = !!next && (nextProgress?.source_stage_id === stageId || link?.source_stage_id === stageId);
     const qualified = settled ? new Set(db.prepare('SELECT participant_id FROM stage_entrants WHERE stage_id = ?').all(String(next!.id)).map(row => String(row.participant_id))) : new Set<string>();
-    return { stageName: stage.name, pointsConfigured: points.length > 0, stations, qualificationPlaces: slots, qualificationSettled: settled, rows: rows.map(row => {
+    const resultIds = db.prepare('SELECT request_id FROM attempts WHERE stage_id = ? ORDER BY request_id').all(stageId).map(row => String(row.request_id));
+    return { stageName: stage.name, pointsConfigured: points.length > 0, stations, qualificationPlaces: slots, qualificationSettled: settled, resultIds, rows: rows.map(row => {
       const tiedCount = rows.filter(other => other.rank !== null && other.rank === row.rank && !other.forfeited).length;
       const contested = slots !== null && row.rank !== null && row.rank <= slots && row.rank + tiedCount - 1 > slots;
       return { ...row, withdrawn: withdrawn.has(row.participantId), qualification: row.forfeited || slots === null ? null : settled ? qualified.has(row.participantId) ? 'qualified' : null : row.rank !== null && row.rank <= slots ? contested ? 'contested' : 'position' : null };

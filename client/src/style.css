@@ -1,12 +1,22 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: "Pixelify Sans";
+  src: url("/fonts/PixelifySans.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+}
+body { font-family: "Pixelify Sans", ui-sans-serif, sans-serif; }
+button, input, select, textarea { font-family: inherit; }
 
-.wheel-shell { position: relative; width: min(68vh, 78vw, 42rem); aspect-ratio: 1; }
+
+.wheel-shell { position: relative; width: min(66vh, 88vw, 70rem); aspect-ratio: 1; container-type: inline-size; }
 .wheel { position: absolute; inset: 0; border: 5px solid #e2e8f0; border-radius: 50%; overflow: hidden; }
 .wheel-spinning { transition: transform 3.2s cubic-bezier(.12,.65,.13,1); }
-.wheel-pointer { position: absolute; left: 50%; top: -8px; z-index: 1; transform: translateX(-50%); width: 0; height: 0; border-left: 10px solid transparent; border-right: 10px solid transparent; border-top: 20px solid white; }
-.wheel-label { position: absolute; left: 50%; top: 50%; height: 48%; width: 38%; transform-origin: center bottom; text-align: center; padding-top: 0.6rem; font-size: clamp(0.7rem, 1.6vw, 1.25rem); line-height: 1.05; font-weight: 700; text-shadow: 0 1px 3px black; }
-.wheel-label span { display: block; overflow: hidden; max-height: 2.2em; overflow-wrap: anywhere; }
+.wheel-pointer { position: absolute; left: -8px; top: 50%; z-index: 1; transform: translateY(-50%); width: 0; height: 0; border-top: 12px solid transparent; border-bottom: 12px solid transparent; border-left: 24px solid #ffe879; }
+.wheel-label { position: absolute; left: 50%; top: 50%; width: 44%; transform-origin: right center; text-align: left; padding-left: 0.35rem; line-height: 1.1; font-weight: 700; text-shadow: 0 1px 3px black; }
+.wheel-label span { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 @media (prefers-reduced-motion: reduce) { .wheel-spinning { transition: none; } }
 
 
@@ -71,14 +81,14 @@
 .score-table tbody tr:nth-child(4n) .score-player { color: #bfb2ff; }
 .score-table tbody tr.bg-emerald-950\/60 { background-color: #14352f; }
 .score-table tbody tr.bg-amber-950\/60 { background-color: #49310d; }
-.score-rank, .score-total { font-family: ui-monospace, monospace; font-weight: 800; }
+.score-rank, .score-total { font-family: "Pixelify Sans", ui-monospace, monospace; font-weight: 700; }
 .score-rank { color: #ffe274; }
 .score-total { color: #fff088; }
 .arcade-wheel-panel { border-color: #9a47e4; box-shadow: inset 0 0 0 3px #2e1957, 0 0 22px #b345db2e; }
 .arcade-wheel-title { font-size: .8rem; color: #8df4ec; }
 .wheel { border-color: #ffe680; box-shadow: inset 0 0 0 3px #532568; }
 .wheel-shell { filter: drop-shadow(0 0 9px #e847c988); }
-.wheel-pointer { border-top-color: #ffe879; }
+
 .arcade-winner { border-radius: .5rem; border-color: #ffe36a; box-shadow: 0 0 0 5px #742cb3, 0 0 0 10px #2ce1e1, 0 0 55px #eb45c777; }
 .arcade-winner-kicker { font-size: clamp(.55rem, 1.8vw, .85rem); line-height: 1.8; animation: champion-light 2.4s ease-in-out infinite alternate; }
 @keyframes score-blink { 50% { opacity: .45; } }
@@ -90,8 +100,35 @@
 }
 
 @media (max-width: 600px) {
-  .score-table { font-size: .85rem; }
-  .score-table th { padding: .45rem .2rem; font-size: .6rem; letter-spacing: 0; }
+  .score-table { font-size: 1rem; }
+  .score-table th { padding: .45rem .2rem; font-size: .68rem; letter-spacing: 0; }
   .score-table td { padding: .55rem .2rem; }
-  .score-player span { display: block; margin-left: 0; font-size: .68rem; }
+  .score-player span { display: block; margin-left: 0; font-size: .75rem; }
 }
+
+/* A wide display gives the wheel the stage and keeps its controls beside it. */
+.wheel-layout { display: grid; justify-items: center; gap: 1rem; }
+.wheel-info { width: 100%; max-width: 32rem; }
+.wheel-result { color: #fff0a0; text-shadow: 0 0 14px #ffb84466; }
+.wheel-controls button { min-height: 3rem; padding: .7rem 1.5rem; font-size: 1.15rem; }
+.wheel-shell::before {
+  content: "";
+  position: absolute;
+  inset: -14px;
+  border-radius: 50%;
+  background: repeating-conic-gradient(#ffe67d 0deg 3deg, #c439b5 3deg 7.5deg, #69f4e7 7.5deg 10.5deg, #572689 10.5deg 15deg);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 12px), #000 calc(100% - 11px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 12px), #000 calc(100% - 11px));
+  animation: wheel-lights 2.4s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+.wheel-pointer { z-index: 2; filter: drop-shadow(0 2px 3px #000); }
+@keyframes wheel-lights { from { filter: brightness(.8); } to { filter: brightness(1.35); } }
+@media (min-width: 1000px) {
+  .arcade-app:has(.arcade-wheel-panel) .tournament-heading { display: none; }
+  .wheel-layout { grid-template-columns: minmax(0, 1fr) minmax(17rem, 27%); align-items: center; }
+  .wheel-shell { max-width: 100%; }
+  .wheel-info { padding: 1.5rem; border-left: 2px solid #542b80; }
+  .wheel-result { font-size: clamp(1.8rem, 2.4vw, 3rem); line-height: 1.2; }
+}
+@media (prefers-reduced-motion: reduce) { .wheel-shell::before { animation: none; } }
