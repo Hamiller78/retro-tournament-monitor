@@ -32,6 +32,7 @@ test('creates a tournament and shares participant updates', async ({ browser, pa
   await page.getByLabel('Attempts', { exact: true }).fill('2');
   await page.getByLabel('Points by finishing position').fill('12, 10, 8');
   await page.getByRole('button', { name: 'Save game settings' }).click();
+  await expect(page.getByRole('button', { name: 'Save game settings' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Game settings Qualifying' }).click();
   await expect(page.getByLabel('Game name')).toHaveValue('Pong');
   await page.getByText('Game information (optional)').click();

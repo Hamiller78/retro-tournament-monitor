@@ -24,6 +24,7 @@ export function registerProgressionRoutes(app: FastifyInstance, db: DatabaseSync
     db.exec('BEGIN');
     try {
       if (next) { db.prepare('DELETE FROM withdrawal_replacements WHERE stage_id = ?').run(next.stage_id as string); db.prepare('DELETE FROM tie_resolutions WHERE tie_stage_id = ?').run(next.stage_id as string); db.prepare('DELETE FROM stage_entrants WHERE stage_id = ?').run(next.stage_id as string); db.prepare('DELETE FROM station_sessions WHERE stage_id = ?').run(next.stage_id as string); db.prepare('DELETE FROM stage_progress WHERE stage_id = ?').run(next.stage_id as string); }
+      db.prepare('DELETE FROM display_wheels WHERE tournament_id = ?').run(id);
       db.prepare('DELETE FROM station_completions WHERE stage_id = ?').run(stageId);
       db.prepare("UPDATE stage_progress SET status = 'active' WHERE stage_id = ?").run(stageId); db.exec('COMMIT');
     } catch (error) { db.exec('ROLLBACK'); throw error; }

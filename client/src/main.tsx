@@ -12,6 +12,8 @@ import { TournamentViews } from './TournamentViews';
 
 import { DownloadBackup, RestoreBackup } from './BackupControls';
 import { SoundProvider } from './Sound';
+import { DisplayApp } from './DisplayApp';
+import { TrophySetup } from './TrophySetup';
 
 
 
@@ -167,6 +169,8 @@ function App() {
 
         <StageSetup key={selected} tournamentId={selected} stages={tournament.stages} token={token} onChange={() => setRevision(n => n + 1)} onSettingsSaved={(stageId, settings) => setTournament(current => current && current.id === selected ? { ...current, stages: current.stages.map(stage => stage.id === stageId ? { ...stage, settings } : stage) } : current)} onError={setError} />
 
+        {token && <TrophySetup tournamentId={selected} token={token} hasImage={tournament.hasTrophyImage} revision={revision} onChange={() => setRevision(n => n + 1)} onError={setError} />}
+
         {token && <DownloadBackup tournamentId={selected} token={token} onError={setError} />}
 
         </TournamentViews>
@@ -181,5 +185,6 @@ function App() {
 
 
 
-createRoot(document.getElementById('root')!).render(<StrictMode><SoundProvider><App /></SoundProvider></StrictMode>);
+const displayMatch = /^\/display\/([^/]+)\/?$/.exec(window.location.pathname);
+createRoot(document.getElementById('root')!).render(<StrictMode><SoundProvider>{displayMatch ? <DisplayApp tournamentId={displayMatch[1]} /> : <App />}</SoundProvider></StrictMode>);
 

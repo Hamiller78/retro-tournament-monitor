@@ -7,7 +7,7 @@ export function RestoreBackup({ onError, onRestored }: Props) {
   const [file, setFile] = useState<File | null>(null); const [pin, setPin] = useState(''); const [busy, setBusy] = useState(false);
   async function restore(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); const form = event.currentTarget; onError(''); if (!file) return;
-    if (file.size > 900000) { onError('This backup is too large to restore.'); return; }
+    if (file.size > 7900000) { onError('This backup is too large to restore.'); return; }
     setBusy(true);
     try {
       let backup: unknown;

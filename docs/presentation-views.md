@@ -29,3 +29,9 @@ The user wants arcade sounds for the wheel and ranking updates. Sound is off by 
 ## Game information
 
 Each wheel game can optionally include a developer, platform, release year, and description. After a selection is confirmed, the wheel view shows the provided information next to the game. These details are configured per station pool and included in tournament backups.
+
+## Dedicated TV display
+
+A read-only address for each tournament follows the active stage automatically and uses the screen for its ranking. When an operating device opens a wheel view for the active stage, the TV follows it. Confirming a game keeps that wheel on screen; the TV switches to the next wheel only when an operator selects it. Leaving the wheel view returns the TV to the ranking. Once the final determines a winner, the TV switches to a full-screen winner presentation, including the configured trophy image. It stays on the winner across refreshes and updates if the result is corrected, updates over the local network, and has no result-entry controls. If the display loses connection, it indicates this and reconnects.
+
+- An administrator can choose or remove a tournament trophy image in setup. The winner celebration displays it; otherwise it uses the trophy symbol. The image is included in portable and automatic backups.

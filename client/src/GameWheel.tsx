@@ -3,8 +3,8 @@ import type { Stage } from '../../shared/contracts';
 import { useSound } from './Sound';
 
 const colors = ['#7c3aed', '#be185d', '#0369a1', '#047857', '#b45309', '#4338ca', '#9f1239', '#0f766e'];
-type Props = { stage: Stage; station: number; tournamentId: string; token: string; onError: (message: string) => void; onChange: () => void };
-export function GameWheel({ stage, station, tournamentId, token, onError, onChange }: Props) {
+type Props = { stage: Stage; station: number; tournamentId: string; token: string; onError: (message: string) => void; onChange: () => void; displayOnly?: boolean };
+export function GameWheel({ stage, station, tournamentId, token, onError, onChange, displayOnly = false }: Props) {
   const games = stage.settings?.stations?.[station]?.games ?? [];
   const draw = stage.draws.find(item => item.station === station);
   const game = draw ? games[draw.gameIndex] : undefined;
@@ -72,8 +72,8 @@ export function GameWheel({ stage, station, tournamentId, token, onError, onChan
         {game.description?.trim() && <p className="game-description mt-3 whitespace-pre-wrap text-slate-100">{game.description}</p>}
       </> : <p className="mt-2 text-slate-400">No game information added yet.</p>}
     </section>}
-    {games.length > 0 && <p className="mt-1 text-center text-xs text-slate-400">Games: {games.map(g => g.name).join(', ')}</p>}
-    {<div className="wheel-controls mt-3 flex flex-wrap justify-center gap-2">{draw?.confirmed ? token && <button type="button" disabled={busy} onClick={() => void action('unlock')} className="rounded-lg border border-slate-600 px-3 py-2 text-sm disabled:opacity-50">Unlock game</button> : <><button type="button" disabled={busy || spinning || !games.length} onClick={() => void action('spin')} className="rounded-lg bg-violet-600 px-4 py-2 font-semibold disabled:opacity-50">{draw ? 'Spin again' : 'Spin'}</button>{draw && <button type="button" disabled={busy || spinning || !game} onClick={() => void action('confirm', { drawId: draw.drawId })} className="rounded-lg border border-emerald-600 px-3 py-2 disabled:opacity-50">Confirm game</button>}</>}</div>}</div></div>
+    {!displayOnly && games.length > 0 && <p className="mt-1 text-center text-xs text-slate-400">Games: {games.map(g => g.name).join(', ')}</p>}
+    {!displayOnly && <div className="wheel-controls mt-3 flex flex-wrap justify-center gap-2">{draw?.confirmed ? token && <button type="button" disabled={busy} onClick={() => void action('unlock')} className="rounded-lg border border-slate-600 px-3 py-2 text-sm disabled:opacity-50">Unlock game</button> : <><button type="button" disabled={busy || spinning || !games.length} onClick={() => void action('spin')} className="rounded-lg bg-violet-600 px-4 py-2 font-semibold disabled:opacity-50">{draw ? 'Spin again' : 'Spin'}</button>{draw && <button type="button" disabled={busy || spinning || !game} onClick={() => void action('confirm', { drawId: draw.drawId })} className="rounded-lg border border-emerald-600 px-3 py-2 disabled:opacity-50">Confirm game</button>}</>}</div>}</div></div>
   </section>;
 }
 

@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import type { FastifyInstance } from 'fastify';
 import { randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
+import { validTrophy } from './trophy';
 
 const id = z.uuid();
 const name = z.string().trim().min(1).max(100);
@@ -13,6 +14,7 @@ const settings = z.union([
 const schema = z.object({
   format: z.literal('retromania-tournament'), version: z.literal(1),
   tournament: z.object({ name, pinSalt: z.string().regex(/^[0-9a-f]{32}$/), pinHash: z.string().regex(/^[0-9a-f]{64}$/) }),
+  trophyImage: z.string().refine(validTrophy).nullable().default(null),
   participants: z.array(z.object({ id, displayName: name, realName: z.string().max(100).nullable() })).max(1000),
   stages: z.array(z.object({ id, name, kind: z.enum(['two-station', 'elimination', 'duel', 'tie-breaker']), participantCount: z.number().int().min(1).max(999).nullable(), position: z.number().int().min(0).max(10000), settings: settings.nullable() })).max(100),
   draws: z.array(z.object({ stageId: id, station: z.union([z.literal(0), z.literal(1)]), gameIndex: z.number().int().min(0), confirmed: z.union([z.literal(0), z.literal(1)]) })).max(200),
@@ -43,7 +45,8 @@ export function exportTournament(db: DatabaseSync, tournamentId: string) {
   const stageResults = db.prepare('SELECT stage_results.stage_id AS stageId, participant_id AS participantId, stage_results.position FROM stage_results JOIN stages ON stages.id = stage_results.stage_id WHERE stages.tournament_id = ?').all(tournamentId);
   const stationCompletions = db.prepare('SELECT station_completions.stage_id AS stageId, station FROM station_completions JOIN stages ON stages.id = station_completions.stage_id WHERE stages.tournament_id = ?').all(tournamentId);
   const tieResolutions = db.prepare('SELECT tie_stage_id AS tieStageId, source_stage_id AS sourceStageId, target_stage_id AS targetStageId, slots FROM tie_resolutions JOIN stages ON stages.id = tie_resolutions.tie_stage_id WHERE stages.tournament_id = ?').all(tournamentId);
-  return { format: 'retromania-tournament', version: 1, tournament, participants, stages, draws, attempts, withdrawals, withdrawalReplacements, forfeits, progress, entrants, stageResults, stationCompletions, tieResolutions };
+  const trophyImage = db.prepare('SELECT data FROM trophy_images WHERE tournament_id = ?').get(tournamentId)?.data ?? null;
+  return { format: 'retromania-tournament', version: 1, tournament, trophyImage, participants, stages, draws, attempts, withdrawals, withdrawalReplacements, forfeits, progress, entrants, stageResults, stationCompletions, tieResolutions };
 }
 function isConsistent(backup: Backup) {
   const stages = new Map(backup.stages.map(stage => [stage.id, stage]));
@@ -142,6 +145,7 @@ export function registerBackupRoutes(app: FastifyInstance, db: DatabaseSync, aut
     db.exec('BEGIN');
     try {
       db.prepare('INSERT INTO tournaments VALUES (?, ?, ?, ?)').run(tournamentId, `${backup.tournament.name.slice(0, 89)} (restored)`, backup.tournament.pinSalt, backup.tournament.pinHash);
+      if (backup.trophyImage) db.prepare('INSERT INTO trophy_images (tournament_id, data) VALUES (?, ?)').run(tournamentId, backup.trophyImage);
       const insertPlayer = db.prepare('INSERT INTO participants VALUES (?, ?, ?, ?)');
       for (const p of backup.participants) insertPlayer.run(players.get(p.id)!, tournamentId, p.displayName, p.realName);
       const insertStage = db.prepare('INSERT INTO stages VALUES (?, ?, ?, ?, ?, ?)'); const insertSettings = db.prepare('INSERT INTO stage_settings VALUES (?, ?)');

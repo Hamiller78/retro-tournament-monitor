@@ -15,7 +15,7 @@ export function registerLeaderboardRoutes(app: FastifyInstance, db: DatabaseSync
     const source = db.prepare('SELECT source_stage_id FROM stage_progress WHERE stage_id = ?').get(stageId);
     const entrants = new Set(db.prepare('SELECT participant_id FROM stage_entrants WHERE stage_id = ?').all(stageId).map(row => String(row.participant_id)));
     const participants = db.prepare('SELECT id AS participantId, display_name AS displayName FROM participants WHERE tournament_id = ?').all(id).filter(row => !source?.source_stage_id || entrants.has(String(row.participantId))).map(row => ({ participantId: String(row.participantId), displayName: String(row.displayName) }));
-    const entries = db.prepare('SELECT participant_id AS participantId, station, value FROM attempts WHERE stage_id = ?').all(stageId).map(row => ({ participantId: String(row.participantId), station: Number(row.station), value: Number(row.value) }));
+    const entries = db.prepare('SELECT participant_id AS participantId, station, attempt, value FROM attempts WHERE stage_id = ?').all(stageId).map(row => ({ participantId: String(row.participantId), station: Number(row.station), attempt: Number(row.attempt), value: Number(row.value) }));
     const games = [0, 1].map(station => { const draw = draws.find(row => row.station === station); return draw ? settings.stations?.[station]?.games[Number(draw.gameIndex)] ?? null : null; });
     const stations = games.map((game, station) => { const session = sessions.find(row => row.station === station); return { game: game?.name ?? null, nowPlaying: [session?.participantId, session?.participantId2].map(id => participants.find(player => player.participantId === id)?.displayName).filter(Boolean).join(' & ') || null }; });
     const points = settings.points ?? [];
@@ -32,7 +32,8 @@ export function registerLeaderboardRoutes(app: FastifyInstance, db: DatabaseSync
     return { stageName: stage.name, pointsConfigured: points.length > 0, stations, qualificationPlaces: slots, qualificationSettled: settled, resultIds, rows: rows.map(row => {
       const tiedCount = rows.filter(other => other.rank !== null && other.rank === row.rank && !other.forfeited).length;
       const contested = slots !== null && row.rank !== null && row.rank <= slots && row.rank + tiedCount - 1 > slots;
-      return { ...row, withdrawn: withdrawn.has(row.participantId), qualification: row.forfeited || slots === null ? null : settled ? qualified.has(row.participantId) ? 'qualified' : null : row.rank !== null && row.rank <= slots ? contested ? 'contested' : 'position' : null };
+      const resultSignature = JSON.stringify(entries.filter(entry => entry.participantId === row.participantId).sort((a, b) => a.station - b.station || a.attempt - b.attempt).map(entry => [entry.station, entry.attempt, entry.value]));
+      return { ...row, resultSignature, withdrawn: withdrawn.has(row.participantId), qualification: row.forfeited || slots === null ? null : settled ? qualified.has(row.participantId) ? 'qualified' : null : row.rank !== null && row.rank <= slots ? contested ? 'contested' : 'position' : null };
     }) };
   });
 }

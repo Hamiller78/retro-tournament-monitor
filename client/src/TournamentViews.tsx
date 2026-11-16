@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import type { Tournament } from '../../shared/contracts';
 
@@ -32,6 +32,7 @@ type Props = { tournament: Tournament; token: string; children: ReactNode; onErr
 export function TournamentViews({ tournament, token, children, onError, onChange, onViewChange, revision }: Props) {
 
   const [view, setView] = useState<View>('setup');
+  const displayQueue = useRef<Promise<void>>(Promise.resolve());
 
   const [drawStage, setDrawStage] = useState('');
 
@@ -57,18 +58,32 @@ export function TournamentViews({ tournament, token, children, onError, onChange
 
   }
 
+  function updateDisplay(selection: { mode: 'ranking' } | { mode: 'wheel'; stageId: string; station: 0 | 1 }) {
+    displayQueue.current = displayQueue.current.then(async () => {
+      const response = await fetch(`/api/tournaments/${tournament.id}/display-view`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(selection) });
+      if (!response.ok) { const result = await response.json(); throw new Error(result.error || 'Could not update the TV display.'); }
+    }).catch(error => onError(error instanceof TypeError ? 'Could not update the TV display. Check the connection.' : (error as Error).message));
+  }
+  function chooseView(next: View) {
+    const wasWheel = view === 'wheel1' || view === 'wheel2';
+    setView(next); onViewChange(next !== 'setup');
+    if (next === 'wheel1' || next === 'wheel2') {
+      if (stage) updateDisplay({ mode: 'wheel', stageId: stage.id, station: next === 'wheel1' ? 0 : 1 });
+    } else if (wasWheel) updateDisplay({ mode: 'ranking' });
+  }
   const wheel = view === 'wheel1' || view === 'wheel2';
 
   return <>
 
-    <TournamentWinner tournamentId={tournament.id} revision={revision} />
+    <TournamentWinner tournamentId={tournament.id} revision={revision} hasTrophyImage={tournament.hasTrophyImage} />
 
     <nav aria-label="Tournament views" className="arcade-nav mt-5 flex flex-wrap items-center gap-2 border-b border-slate-700 pb-3">
 
-      {views.map(item => <button type="button" key={item.id} aria-current={view === item.id ? 'page' : undefined} onClick={() => { setView(item.id); onViewChange(item.id !== 'setup'); }} className={`rounded-lg px-3 py-2 text-sm ${view === item.id ? 'bg-violet-700 text-white' : 'bg-slate-800 text-slate-200 hover:bg-slate-700'}`}>{item.label}</button>)}
+      {views.map(item => <button type="button" key={item.id} aria-current={view === item.id ? 'page' : undefined} onClick={() => chooseView(item.id)} className={`rounded-lg px-3 py-2 text-sm ${view === item.id ? 'bg-violet-700 text-white' : 'bg-slate-800 text-slate-200 hover:bg-slate-700'}`}>{item.label}</button>)}
 
-      {laterStages.map(item => { const stageTab = `stage:${item.id}` as const; return <button type="button" key={item.id} aria-current={view === stageTab ? 'page' : undefined} onClick={() => { setView(stageTab); onViewChange(true); }} className={`rounded-lg px-3 py-2 text-sm ${view === stageTab ? 'bg-violet-700 text-white' : 'bg-slate-800 text-slate-200 hover:bg-slate-700'}`}>{item.name}</button>; })}
+      {laterStages.map(item => { const stageTab = `stage:${item.id}` as const; return <button type="button" key={item.id} aria-current={view === stageTab ? 'page' : undefined} onClick={() => chooseView(stageTab)} className={`rounded-lg px-3 py-2 text-sm ${view === stageTab ? 'bg-violet-700 text-white' : 'bg-slate-800 text-slate-200 hover:bg-slate-700'}`}>{item.name}</button>; })}
 
+      <a className="rounded-lg border border-cyan-700 px-3 py-2 text-sm text-cyan-200 hover:bg-slate-800" href={`/display/${tournament.id}`} target="_blank" rel="noopener noreferrer">Open TV display</a>
       <SoundControl />
       {document.fullscreenEnabled && <button type="button" onClick={() => void toggleFullscreen()} className="ml-auto rounded-lg border border-slate-600 px-3 py-2 text-sm">{fullScreen ? 'Exit full screen' : 'Full screen'}</button>}
 
@@ -78,7 +93,7 @@ export function TournamentViews({ tournament, token, children, onError, onChange
 
     {wheel && <section className="mt-5" aria-label="Game draw">
 
-      {stages.length > 1 && <label className="mb-4 block text-sm">Round <select className="ml-2 rounded-lg bg-slate-800 px-3 py-2" value={stage?.id ?? ''} onChange={event => setDrawStage(event.target.value)}>{stages.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
+      {stages.length > 1 && <label className="mb-4 block text-sm">Round <select className="ml-2 rounded-lg bg-slate-800 px-3 py-2" value={stage?.id ?? ''} onChange={event => { const id = event.target.value; setDrawStage(id); updateDisplay({ mode: 'wheel', stageId: id, station: view === 'wheel1' ? 0 : 1 }); }}>{stages.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
 
       {stage ? <GameWheel key={`${stage.id}-${view}`} stage={stage} station={view === 'wheel1' ? 0 : 1} tournamentId={tournament.id} token={token} onError={onError} onChange={onChange} /> : <p className="p-6 text-slate-300">Add a two-station stage in Setup to use the wheels.</p>}
 

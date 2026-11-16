@@ -42,6 +42,7 @@ export function advanceStage(db: DatabaseSync, id: string, stageId: string, back
         db.prepare("INSERT INTO stage_progress VALUES (?, 'active', ?)").run(target, stageId);
         const insert = db.prepare('INSERT INTO stage_entrants VALUES (?, ?, ?)'); qualifiers.forEach((player, position) => insert.run(target, player, position));
       }
+      db.prepare('DELETE FROM display_wheels WHERE tournament_id = ?').run(id);
       db.exec('COMMIT');
     } catch (error) { db.exec('ROLLBACK'); throw error; }
     return { ok: true, nextStageId: target, winnerId: target ? null : qualifiers[0], warning: saveBackup(db, id, stageId, backupDirectory, logError) };
@@ -67,6 +68,7 @@ export function advanceStage(db: DatabaseSync, id: string, stageId: string, back
       db.prepare('INSERT INTO tie_resolutions VALUES (?, ?, ?, ?)').run(tieStageId, stageId, next ? String(next.id) : null, slots);
       const insert = db.prepare('INSERT INTO stage_entrants VALUES (?, ?, ?)'); selection.tie.tied.forEach((player, position) => insert.run(tieStageId, player, position));
       db.prepare('DELETE FROM station_sessions WHERE stage_id = ?').run(stageId);
+      db.prepare('DELETE FROM display_wheels WHERE tournament_id = ?').run(id);
       db.exec('COMMIT');
     } catch (error) { db.exec('ROLLBACK'); throw error; }
     return { ok: true, nextStageId: tieStageId, winnerId: null, tieBreakerActivated: true, warning: saveBackup(db, id, stageId, backupDirectory, logError) };
@@ -81,6 +83,7 @@ export function advanceStage(db: DatabaseSync, id: string, stageId: string, back
       selection.players.forEach((player, position) => insert.run(next.id as string, player, position));
     }
     db.prepare('DELETE FROM station_sessions WHERE stage_id = ?').run(stageId);
+    db.prepare('DELETE FROM display_wheels WHERE tournament_id = ?').run(id);
     db.exec('COMMIT');
   } catch (error) { db.exec('ROLLBACK'); throw error; }
   return { ok: true, nextStageId: next ? String(next.id) : null, winnerId: next ? null : selection.players[0], warning: saveBackup(db, id, stageId, backupDirectory, logError) };

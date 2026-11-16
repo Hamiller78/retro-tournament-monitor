@@ -106,16 +106,7 @@ button, input, select, textarea { font-family: inherit; }
 @keyframes score-lights { from { background-position-x: 0; } to { background-position-x: 51px; } }
 @keyframes champion-light { from { color: #ffe374; text-shadow: 0 0 2px #ffcb3e; } to { color: #fff2b2; text-shadow: 0 0 14px #ffb627; } }
 @media (prefers-reduced-motion: reduce) {
-  .arcade-header::after, .arcade-winner-kicker, .score-screen::before {
-  content: "";
-  position: absolute;
-  inset: 6px 12px auto;
-  height: 4px;
-  background: repeating-linear-gradient(90deg, #ffe36a 0 6px, transparent 6px 17px, #ff6cc8 17px 23px, transparent 23px 34px, #70f5e8 34px 40px, transparent 40px 51px);
-  animation: score-lights 3s steps(3, end) infinite;
-  pointer-events: none;
-}
-.score-kicker { animation: none; }
+  .arcade-header::after, .arcade-winner-kicker, .score-kicker, .score-screen::before { animation: none; }
   .arcade-nav button { transition: none; }
 }
 
@@ -157,3 +148,39 @@ button, input, select, textarea { font-family: inherit; }
 .game-info-heading { font-family: "Press Start 2P", ui-monospace, monospace; font-size: .65rem; line-height: 1.6; }
 .game-info dl { font-size: clamp(1.1rem, 1.3vw, 1.5rem); }
 .game-description { font-size: clamp(1.1rem, 1.25vw, 1.5rem); line-height: 1.4; }
+
+@media (prefers-reduced-motion: reduce) {
+  tr[data-ranking-updated] > td { box-shadow: inset 0 2px #ffe674, inset 0 -2px #ffe674; }
+}
+
+/* Unattended TV display: spend the viewport on the current ranking. */
+.tv-display { min-height: 100dvh; padding: clamp(.5rem, 1vw, 1rem) clamp(.75rem, 2vw, 2rem); color: #f8fafc; }
+.display-header { display: flex; align-items: end; justify-content: space-between; gap: 1rem; padding-bottom: .45rem; border-bottom: 2px solid #42e6e2; }
+.display-brand { color: #72eae8; font-family: "Press Start 2P", ui-monospace, monospace; font-size: clamp(.55rem, .9vw, .85rem); }
+.display-header h1 { margin-top: .25rem; color: #ffe477; font-size: clamp(1.5rem, 3.2vh, 3rem); font-weight: 700; line-height: 1.1; }
+.display-header-meta { display: flex; flex-direction: column; align-items: end; color: #c5b4ff; font-size: clamp(.8rem, 1.6vh, 1.2rem); }
+.display-header-meta [role="status"] { color: #ffca70; }
+.display-ranking { margin-top: .35rem; font-size: clamp(.9rem, var(--display-row-size), 2.6rem); }
+.display-table-wrap { max-width: 100%; overflow: auto; }
+.display-ranking .score-table { width: 100%; border-spacing: 0 .15rem; font-size: inherit; }
+.display-ranking .score-table th, .display-ranking .score-table td { padding: clamp(1px, .3vh, 4px) clamp(.35rem, .8vw, .9rem); }
+.display-ranking .score-table th { font-size: clamp(.7rem, 1.8vh, 1.15rem); }
+.display-ranking .score-table td { line-height: 1.2; }
+.display-ranking .score-table .score-player span { font-size: .48em; }
+.display-table { text-align: left; }
+.display-table th:last-child, .display-table td:last-child { text-align: right; }
+.display-message { margin-top: 1rem; font-size: 1.5rem; color: #ffc57b; }
+
+.tv-display .display-wheel { margin-top: .4rem; }
+.tv-display .display-wheel .arcade-wheel-panel { padding: .5rem; }
+.tv-display .display-wheel .wheel-shell { width: min(78vh, 88vw, 80rem); }
+.tv-display .display-wheel .wheel-info { max-width: none; }
+
+.tv-winner { display: grid; place-items: center; min-height: 100dvh; text-align: center; }
+.tv-winner-card { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: clamp(.5rem, 2vh, 1.5rem); width: min(94vw, 85rem); min-height: 85vh; padding: clamp(1rem, 3vh, 3rem); background: linear-gradient(135deg, #2e1065, #0f172a, #701a75); border: 2px solid #ffe36a; }
+.tv-winner-card img { max-height: 38vh; max-width: 75vw; object-fit: contain; border-radius: .5rem; }
+.tv-winner-icon { font-size: clamp(4rem, 13vh, 10rem); line-height: 1; }
+.tv-winner-card h1 { font-size: clamp(2rem, 5vh, 5rem); color: white; }
+.tv-winner-name { font-size: clamp(2.5rem, 7vh, 7rem); color: #ddd6fe; font-weight: 900; overflow-wrap: anywhere; }
+.tv-winner-congratulations { font-size: clamp(1.2rem, 2.5vh, 2.5rem); }
+.tv-winner-status { position: fixed; top: .5rem; right: 1rem; color: #ffca70; }

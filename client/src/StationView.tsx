@@ -3,10 +3,13 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import type { GameSettings, Stage, Tournament } from '../../shared/contracts';
 
 import { formatRaceTime, parseRaceTime } from './raceTime';
+import { useRankingAnimation } from './useRankingAnimation';
 
 
 
 type Row = { participantId: string; displayName: string; attempts: number[]; best: number | null; rank: number | null; forfeited: boolean; withdrawn?: boolean };
+
+const rowSignature = (row: Row) => [row.rank, row.attempts, row.best, row.forfeited, row.withdrawn];
 
 type Entry = { participantId: string; attempt: number; value: number };
 
@@ -29,6 +32,7 @@ export function StationView({ tournament, stage, station, adminToken, revision, 
   const [token, setToken] = useState(() => sessionStorage.getItem(key) ?? '');
 
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+  const { tableBody: rankingBody, capture: captureRanking } = useRankingAnimation(snapshot?.ranking, rowSignature);
 
   const [values, setValues] = useState<Record<string, string>>({}); const [busy, setBusy] = useState(false);
 
@@ -48,13 +52,13 @@ export function StationView({ tournament, stage, station, adminToken, revision, 
 
       if (!response.ok) { setSnapshot(null); return; }
 
-      const data: Snapshot = await response.json(); setSnapshot(data);
+      const data: Snapshot = await response.json(); captureRanking(); setSnapshot(data);
 
       if (token && !data.controlled) { sessionStorage.removeItem(key); setToken(''); }
 
     } catch { /* retain the visible value and last known state while disconnected */ }
 
-  }, [base, key, token]);
+  }, [base, key, token, captureRanking]);
 
   useEffect(() => { void refresh(); }, [refresh, revision]);
 
@@ -231,7 +235,7 @@ export function StationView({ tournament, stage, station, adminToken, revision, 
 
     <p className="mt-4 text-sm text-slate-400">Preliminary standings · best attempt counts</p>
 
-    <div className="mt-2 overflow-x-auto"><table className="w-full text-left"><thead><tr className="border-b border-slate-600"><th className="p-2">Rank</th><th className="p-2">Player</th><th className="p-2">Attempts</th><th className="p-2">Best</th><th className="p-2"><span className="sr-only">Actions</span></th></tr></thead><tbody>{snapshot.ranking.map(row => <tr key={row.participantId} className="border-b border-slate-800"><td className="p-2">{row.rank ?? '—'}</td><td className="p-2 font-semibold">{row.displayName}</td><td className="p-2"><span className={row.forfeited ? "mr-2 font-semibold text-amber-300" : row.attempts.length >= snapshot.game.attempts ? "mr-2 font-semibold text-emerald-300" : "mr-2 text-slate-300"}>{row.forfeited ? "Forfeited · saved results:" : row.attempts.length >= snapshot.game.attempts ? `Complete (${row.attempts.length}/${snapshot.game.attempts})` : `${row.attempts.length}/${snapshot.game.attempts} completed`}</span>{snapshot.entries.filter(entry => entry.participantId === row.participantId).map(entry => <span className="mr-2 inline-block" key={entry.attempt}>{snapshot.game.resultKind === 'time' ? formatRaceTime(entry.value) : entry.value}{adminToken && stage.status !== "closed" && <> <button type="button" onClick={() => edit(entry)} className="text-violet-300 underline" aria-label={`Edit ${row.displayName} attempt ${entry.attempt}`}>Edit</button> <button type="button" onClick={() => void remove(entry)} className="text-violet-300 underline" aria-label={`Delete ${row.displayName} attempt ${entry.attempt}`}>Delete</button></>}</span>)}{!row.attempts.length && '—'}</td><td className="p-2">{row.best === null ? '—' : snapshot.game.resultKind === 'time' ? formatRaceTime(row.best) : row.best}</td><td className="p-2">{stage.status !== "closed" && !snapshot.stationClosed && snapshot.controlled && !row.forfeited && row.attempts.length < snapshot.game.attempts && <button type="button" className={secondary} disabled={busy} onClick={() => void select(row.participantId)}>{snapshot.activeParticipants.includes(row.participantId) && (snapshot.game.players ?? 1) === 2 ? "Remove" : "Select"} <span className="sr-only">{row.displayName}</span></button>}{adminToken && stage.status !== "closed" && !row.withdrawn && <button type="button" className={`${secondary} ml-2`} disabled={busy} onClick={() => void toggleForfeit(row)}>{row.forfeited ? "Undo forfeit" : "Forfeit"} <span className="sr-only">{row.displayName}</span></button>}</td></tr>)}</tbody></table></div>
+    <div className="mt-2 overflow-x-auto"><table className="w-full text-left"><thead><tr className="border-b border-slate-600"><th className="p-2">Rank</th><th className="p-2">Player</th><th className="p-2">Attempts</th><th className="p-2">Best</th><th className="p-2"><span className="sr-only">Actions</span></th></tr></thead><tbody ref={rankingBody}>{snapshot.ranking.map(row => <tr key={row.participantId} data-ranking-id={row.participantId} className="border-b border-slate-800"><td className="p-2">{row.rank ?? '—'}</td><td className="p-2 font-semibold">{row.displayName}</td><td className="p-2"><span className={row.forfeited ? "mr-2 font-semibold text-amber-300" : row.attempts.length >= snapshot.game.attempts ? "mr-2 font-semibold text-emerald-300" : "mr-2 text-slate-300"}>{row.forfeited ? "Forfeited · saved results:" : row.attempts.length >= snapshot.game.attempts ? `Complete (${row.attempts.length}/${snapshot.game.attempts})` : `${row.attempts.length}/${snapshot.game.attempts} completed`}</span>{snapshot.entries.filter(entry => entry.participantId === row.participantId).map(entry => <span className="mr-2 inline-block" key={entry.attempt}>{snapshot.game.resultKind === 'time' ? formatRaceTime(entry.value) : entry.value}{adminToken && stage.status !== "closed" && <> <button type="button" onClick={() => edit(entry)} className="text-violet-300 underline" aria-label={`Edit ${row.displayName} attempt ${entry.attempt}`}>Edit</button> <button type="button" onClick={() => void remove(entry)} className="text-violet-300 underline" aria-label={`Delete ${row.displayName} attempt ${entry.attempt}`}>Delete</button></>}</span>)}{!row.attempts.length && '—'}</td><td className="p-2">{row.best === null ? '—' : snapshot.game.resultKind === 'time' ? formatRaceTime(row.best) : row.best}</td><td className="p-2">{stage.status !== "closed" && !snapshot.stationClosed && snapshot.controlled && !row.forfeited && row.attempts.length < snapshot.game.attempts && <button type="button" className={secondary} disabled={busy} onClick={() => void select(row.participantId)}>{snapshot.activeParticipants.includes(row.participantId) && (snapshot.game.players ?? 1) === 2 ? "Remove" : "Select"} <span className="sr-only">{row.displayName}</span></button>}{adminToken && stage.status !== "closed" && !row.withdrawn && <button type="button" className={`${secondary} ml-2`} disabled={busy} onClick={() => void toggleForfeit(row)}>{row.forfeited ? "Undo forfeit" : "Forfeit"} <span className="sr-only">{row.displayName}</span></button>}</td></tr>)}</tbody></table></div>
 
   </section>;
 

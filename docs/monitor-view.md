@@ -10,7 +10,7 @@ A compact section for each station shows its selected game and the active player
 
 ## Progression
 
-The next regular stage determines how many places advance. The leaderboard marks current qualifying places and identifies a tie crossing the cutoff; once advancement is resolved it marks the confirmed qualifiers. Preliminary markers are not confirmed qualifiers. If a tie-breaker is required, it can show the tied players and the result. Later, it can show the multiplayer elimination order and the fighting final's current round wins, then the tournament winner. The viewer chooses which view to display by clicking. An optional follow-updates mode briefly highlights new results from another room while keeping the current view in place. The combined view shows results from both stations. Exactly which updates trigger a highlight remains open.
+The next regular stage determines how many places advance. The leaderboard marks current qualifying places and identifies a tie crossing the cutoff; once advancement is resolved it marks the confirmed qualifiers. Preliminary markers are not confirmed qualifiers. If a tie-breaker is required, it can show the tied players and the result. Later, it can show the multiplayer elimination order and the fighting final's current round wins, then the tournament winner. The viewer chooses which view to display by clicking. When rankings change, rows slide to their new positions and rows with updated results or standings briefly flash. The selected view stays in place. Reduced-motion settings replace the animation with a brief steady highlight. The combined view shows results from both stations. Exactly which updates trigger a highlight remains open.
 
 ## Connection state
 

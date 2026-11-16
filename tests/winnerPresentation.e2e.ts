@@ -5,6 +5,8 @@ test('celebrates a scoring final decided by a tie-breaker on another view', asyn
   const name = `Progress ${Date.now()}`;
   const created = await (await request.post('/api/tournaments', { data: { name, pin: '1234' } })).json();
   const root = `/api/tournaments/${created.id}`, headers = { Authorization: `Bearer ${created.token}` };
+  const image = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lXcAAAAASUVORK5CYII=';
+  expect((await request.put(`${root}/trophy`, { headers, data: { image } })).ok()).toBe(true);
   const players: string[] = [];
   for (const displayName of ['Alice', 'Bob', 'Cara']) players.push((await (await request.post(`${root}/participants`, { headers, data: { displayName } })).json()).id);
   const first = (await (await request.post(`${root}/stages`, { headers, data: { name: 'First round', kind: 'two-station', participantCount: 3 } })).json()).id;
@@ -21,6 +23,9 @@ test('celebrates a scoring final decided by a tie-breaker on another view', asyn
       await request.post(`${station}/attempts/batch`, { headers: owner, data: { requestId: randomUUID(), results: [{ participantId: players[i], value: i < 2 ? 100 : 50 }] } });
     }
   }
+  const tv = await page.context().browser()!.newPage();
+  await tv.goto(`/display/${created.id}`);
+  await expect(tv.getByRole('main', { name: 'Tournament winner' })).toHaveCount(0);
   await page.goto('/'); await page.getByRole('button', { name, exact: true }).click();
   const monitor = await page.context().browser()!.newPage();
   await monitor.goto('/'); await monitor.getByRole('button', { name, exact: true }).click();
@@ -33,6 +38,12 @@ test('celebrates a scoring final decided by a tie-breaker on another view', asyn
   await page.getByRole('button', { name: 'Winner Bob' }).click();
   const celebration = monitor.getByRole('dialog', { name: 'We have a winner!' });
   await expect(celebration.getByText('Bob', { exact: true })).toBeVisible();
+  await expect(celebration.getByAltText('Tournament trophy')).toBeVisible();
+  await expect(tv.getByRole('main', { name: 'Tournament winner' }).getByText('Bob')).toBeVisible();
+  await expect(tv.getByAltText('Tournament trophy')).toBeVisible();
+  await tv.reload();
+  await expect(tv.getByRole('main', { name: 'Tournament winner' }).getByText('Bob')).toBeVisible();
+  await tv.close();
   await celebration.getByRole('button', { name: 'Continue' }).click();
   await expect(monitor.getByRole('button', { name: 'Tournament winner: Bob' })).toBeVisible();
   await monitor.close();
