@@ -28,10 +28,11 @@ export async function createApp(databasePath = 'data/retromania.sqlite') {
   db.exec(`PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;
     CREATE TABLE IF NOT EXISTS tournaments (id TEXT PRIMARY KEY, name TEXT NOT NULL, pin_salt TEXT NOT NULL, pin_hash TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS trophy_images (tournament_id TEXT PRIMARY KEY REFERENCES tournaments(id) ON DELETE CASCADE, data TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS tournament_game_locks (tournament_id TEXT PRIMARY KEY REFERENCES tournaments(id) ON DELETE CASCADE);
     CREATE TABLE IF NOT EXISTS participants (id TEXT PRIMARY KEY, tournament_id TEXT NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE, display_name TEXT NOT NULL, real_name TEXT);
     CREATE TABLE IF NOT EXISTS stages (id TEXT PRIMARY KEY, tournament_id TEXT NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE, name TEXT NOT NULL, kind TEXT NOT NULL, participant_count INTEGER, position INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS stage_settings (stage_id TEXT PRIMARY KEY REFERENCES stages(id) ON DELETE CASCADE, settings TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS station_draws (stage_id TEXT NOT NULL REFERENCES stages(id) ON DELETE CASCADE, station INTEGER NOT NULL CHECK (station IN (0, 1)), draw_id TEXT NOT NULL, game_index INTEGER NOT NULL, confirmed INTEGER NOT NULL CHECK (confirmed IN (0, 1)), PRIMARY KEY(stage_id, station));
+    CREATE TABLE IF NOT EXISTS station_draws (stage_id TEXT NOT NULL REFERENCES stages(id) ON DELETE CASCADE, station INTEGER NOT NULL CHECK (station >= 0), draw_id TEXT NOT NULL, game_index INTEGER NOT NULL, confirmed INTEGER NOT NULL CHECK (confirmed IN (0, 1)), PRIMARY KEY(stage_id, station));
     CREATE TABLE IF NOT EXISTS station_sessions (stage_id TEXT NOT NULL REFERENCES stages(id) ON DELETE CASCADE, station INTEGER NOT NULL, token TEXT NOT NULL, active_participant TEXT REFERENCES participants(id) ON DELETE SET NULL, PRIMARY KEY(stage_id, station));
     CREATE TABLE IF NOT EXISTS attempts (request_id TEXT PRIMARY KEY, stage_id TEXT NOT NULL REFERENCES stages(id) ON DELETE RESTRICT, station INTEGER NOT NULL, participant_id TEXT NOT NULL REFERENCES participants(id) ON DELETE RESTRICT, attempt INTEGER NOT NULL, value REAL NOT NULL, UNIQUE(stage_id, station, participant_id, attempt));
     CREATE TABLE IF NOT EXISTS withdrawals (participant_id TEXT PRIMARY KEY REFERENCES participants(id) ON DELETE CASCADE, stage_id TEXT REFERENCES stages(id) ON DELETE RESTRICT);
@@ -41,10 +42,35 @@ export async function createApp(databasePath = 'data/retromania.sqlite') {
     CREATE TABLE IF NOT EXISTS stage_entrants (stage_id TEXT NOT NULL REFERENCES stages(id) ON DELETE RESTRICT, participant_id TEXT NOT NULL REFERENCES participants(id) ON DELETE RESTRICT, position INTEGER NOT NULL, PRIMARY KEY(stage_id, participant_id), UNIQUE(stage_id, position));
     CREATE TABLE IF NOT EXISTS stage_results (id TEXT PRIMARY KEY, stage_id TEXT NOT NULL REFERENCES stages(id) ON DELETE RESTRICT, position INTEGER NOT NULL, participant_id TEXT NOT NULL REFERENCES participants(id) ON DELETE RESTRICT, UNIQUE(stage_id, position));
     CREATE TABLE IF NOT EXISTS withdrawal_replacements (participant_id TEXT PRIMARY KEY REFERENCES withdrawals(participant_id) ON DELETE CASCADE, stage_id TEXT NOT NULL REFERENCES stages(id) ON DELETE CASCADE, replacement_id TEXT NOT NULL REFERENCES participants(id) ON DELETE RESTRICT);
-    CREATE TABLE IF NOT EXISTS station_completions (stage_id TEXT NOT NULL REFERENCES stages(id) ON DELETE CASCADE, station INTEGER NOT NULL CHECK (station IN (0, 1)), PRIMARY KEY(stage_id, station));
-    CREATE TABLE IF NOT EXISTS display_wheels (tournament_id TEXT PRIMARY KEY REFERENCES tournaments(id) ON DELETE CASCADE, stage_id TEXT NOT NULL REFERENCES stages(id) ON DELETE CASCADE, station INTEGER NOT NULL CHECK (station IN (0, 1)));
+    CREATE TABLE IF NOT EXISTS station_completions (stage_id TEXT NOT NULL REFERENCES stages(id) ON DELETE CASCADE, station INTEGER NOT NULL CHECK (station >= 0), PRIMARY KEY(stage_id, station));
+    CREATE TABLE IF NOT EXISTS display_wheels (tournament_id TEXT PRIMARY KEY REFERENCES tournaments(id) ON DELETE CASCADE, stage_id TEXT NOT NULL REFERENCES stages(id) ON DELETE CASCADE, station INTEGER NOT NULL CHECK (station >= 0));
     CREATE TABLE IF NOT EXISTS tie_resolutions (tie_stage_id TEXT PRIMARY KEY REFERENCES stages(id) ON DELETE RESTRICT, source_stage_id TEXT NOT NULL REFERENCES stages(id) ON DELETE RESTRICT, target_stage_id TEXT REFERENCES stages(id) ON DELETE RESTRICT, slots INTEGER NOT NULL);
   `);
+  // Older versions limited these tables to two station indices. Rebuild them atomically.
+  const legacyStationSchema = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'station_draws'").get()?.sql;
+  if (typeof legacyStationSchema === 'string' && /station\s+IN\s*\(\s*0\s*,\s*1\s*\)/i.test(legacyStationSchema)) {
+    try { db.exec(`PRAGMA foreign_keys = OFF; BEGIN;
+      CREATE TABLE station_draws_new (stage_id TEXT NOT NULL REFERENCES stages(id) ON DELETE CASCADE, station INTEGER NOT NULL CHECK (station >= 0), draw_id TEXT NOT NULL, game_index INTEGER NOT NULL, confirmed INTEGER NOT NULL CHECK (confirmed IN (0, 1)), PRIMARY KEY(stage_id, station));
+      INSERT INTO station_draws_new SELECT * FROM station_draws; DROP TABLE station_draws; ALTER TABLE station_draws_new RENAME TO station_draws;
+      CREATE TABLE station_completions_new (stage_id TEXT NOT NULL REFERENCES stages(id) ON DELETE CASCADE, station INTEGER NOT NULL CHECK (station >= 0), PRIMARY KEY(stage_id, station));
+      INSERT INTO station_completions_new SELECT * FROM station_completions; DROP TABLE station_completions; ALTER TABLE station_completions_new RENAME TO station_completions;
+      CREATE TABLE display_wheels_new (tournament_id TEXT PRIMARY KEY REFERENCES tournaments(id) ON DELETE CASCADE, stage_id TEXT NOT NULL REFERENCES stages(id) ON DELETE CASCADE, station INTEGER NOT NULL CHECK (station >= 0));
+      INSERT INTO display_wheels_new SELECT * FROM display_wheels; DROP TABLE display_wheels; ALTER TABLE display_wheels_new RENAME TO display_wheels;
+      INSERT OR IGNORE INTO tournament_game_locks SELECT DISTINCT stages.tournament_id FROM stages LEFT JOIN station_draws ON station_draws.stage_id = stages.id LEFT JOIN stage_progress ON stage_progress.stage_id = stages.id WHERE station_draws.confirmed = 1 OR stage_progress.status IN ('active', 'closed');
+      COMMIT; PRAGMA foreign_keys = ON;`); } catch (error) { try { db.exec('ROLLBACK; PRAGMA foreign_keys = ON;'); } finally { db.close(); } throw error; }
+  }
+  // Older fixed-game configurations may not yet have an automatic selection.
+  const configuredStages = db.prepare('SELECT stage_id, settings FROM stage_settings').all();
+  const fixedDraw = db.prepare('INSERT OR IGNORE INTO station_draws (stage_id, station, draw_id, game_index, confirmed) VALUES (?, ?, ?, 0, 1)');
+  db.exec('BEGIN');
+  try {
+    for (const row of configuredStages) {
+      const settings = JSON.parse(String(row.settings));
+      if (Array.isArray(settings.stations)) settings.stations.forEach((station: { mode?: string; games?: unknown[] }, index: number) => { if (station.mode === 'fixed' && station.games?.length === 1) fixedDraw.run(String(row.stage_id), index, randomUUID()); });
+      else if (settings.gameSelection === 'fixed' && typeof settings.game === 'string' && settings.game.trim()) fixedDraw.run(String(row.stage_id), 0, randomUUID());
+    }
+    db.exec('COMMIT');
+  } catch (error) { db.exec('ROLLBACK'); db.close(); throw error; }
   const columns = db.prepare('PRAGMA table_info(station_sessions)').all();
   if (!columns.some(column => column.name === 'active_participant2')) db.exec('ALTER TABLE station_sessions ADD COLUMN active_participant2 TEXT REFERENCES participants(id) ON DELETE SET NULL');
   const app = Fastify({ logger: true, bodyLimit: 8_000_000 });
@@ -63,7 +89,7 @@ export async function createApp(databasePath = 'data/retromania.sqlite') {
     const display = db.prepare('SELECT stage_id, station FROM display_wheels WHERE tournament_id = ?').get(id);
     const activeId = stages.find(stage => db.prepare('SELECT status FROM stage_progress WHERE stage_id = ?').get(stage.id as string)?.status === 'active')?.id ?? (first && !db.prepare('SELECT 1 FROM stage_progress WHERE stage_id = ?').get(first.id as string) ? first.id : null);
     const displayWheel = display && display.stage_id === activeId ? { stageId: String(display.stage_id), station: Number(display.station) } : null;
-    return { ...tournament, isAdmin: admin, hasTrophyImage: !!db.prepare('SELECT 1 FROM trophy_images WHERE tournament_id = ?').get(id), displayWheel, stages: stages.map(stage => ({ ...stage, status: db.prepare('SELECT status FROM stage_progress WHERE stage_id = ?').get(stage.id as string)?.status ?? (stage.id === first?.id ? 'active' : 'pending'), entrants: db.prepare('SELECT participants.id, participants.display_name AS displayName FROM stage_entrants JOIN participants ON participants.id = stage_entrants.participant_id WHERE stage_entrants.stage_id = ? ORDER BY stage_entrants.position').all(stage.id as string), settings: stage.settings ? JSON.parse(String(stage.settings)) : null, draws: db.prepare('SELECT station, draw_id AS drawId, game_index AS gameIndex, confirmed FROM station_draws WHERE stage_id = ? ORDER BY station').all(stage.id as string).map(draw => ({ ...draw, confirmed: Boolean(draw.confirmed) })) })), participants: participants.map(p => admin ? { id: p.id, displayName: p.displayName, realName: p.realName ?? '', withdrawn: Boolean(p.withdrawn) } : { id: p.id, displayName: p.displayName, withdrawn: Boolean(p.withdrawn) }) };
+    return { ...tournament, isAdmin: admin, gameSelectionStarted: !!db.prepare('SELECT 1 FROM tournament_game_locks WHERE tournament_id = ?').get(id), hasTrophyImage: !!db.prepare('SELECT 1 FROM trophy_images WHERE tournament_id = ?').get(id), displayWheel, stages: stages.map(stage => ({ ...stage, status: db.prepare('SELECT status FROM stage_progress WHERE stage_id = ?').get(stage.id as string)?.status ?? (stage.id === first?.id ? 'active' : 'pending'), entrants: db.prepare('SELECT participants.id, participants.display_name AS displayName FROM stage_entrants JOIN participants ON participants.id = stage_entrants.participant_id WHERE stage_entrants.stage_id = ? ORDER BY stage_entrants.position').all(stage.id as string), settings: stage.settings ? JSON.parse(String(stage.settings)) : null, draws: db.prepare('SELECT station, draw_id AS drawId, game_index AS gameIndex, confirmed FROM station_draws WHERE stage_id = ? ORDER BY station').all(stage.id as string).map(draw => ({ ...draw, confirmed: Boolean(draw.confirmed) })) })), participants: participants.map(p => admin ? { id: p.id, displayName: p.displayName, realName: p.realName ?? '', withdrawn: Boolean(p.withdrawn) } : { id: p.id, displayName: p.displayName, withdrawn: Boolean(p.withdrawn) }) };
   }
   app.addHook('preHandler', async (request, reply) => {
     if (!['POST', 'PUT', 'DELETE', 'PATCH'].includes(request.method)) return;
@@ -106,11 +132,15 @@ export async function createApp(databasePath = 'data/retromania.sqlite') {
     if (!db.prepare('SELECT 1 FROM tournaments WHERE id = ?').get(id)) return reply.code(404).send({ error: 'Tournament not found.' });
     const { mode, stageId, station } = request.body ?? {};
     if (mode === 'ranking') db.prepare('DELETE FROM display_wheels WHERE tournament_id = ?').run(id);
-    else if (mode === 'wheel' && typeof stageId === 'string' && (station === 0 || station === 1)) {
+    else if (mode === 'wheel' && typeof stageId === 'string' && Number.isSafeInteger(station) && (station as number) >= 0) {
       const stage = db.prepare('SELECT stages.kind, stage_progress.status FROM stages LEFT JOIN stage_progress ON stage_progress.stage_id = stages.id WHERE stages.id = ? AND stages.tournament_id = ?').get(stageId, id);
       const first = db.prepare("SELECT id FROM stages WHERE tournament_id = ? AND kind != 'tie-breaker' ORDER BY position LIMIT 1").get(id);
-      if (!stage || stage.kind !== 'two-station' || (stage.status !== 'active' && !(stage.status == null && first?.id === stageId))) return reply.code(409).send({ error: 'Only the active scoring stage can be shown on the TV.' });
-      db.prepare('INSERT INTO display_wheels VALUES (?, ?, ?) ON CONFLICT(tournament_id) DO UPDATE SET stage_id = excluded.stage_id, station = excluded.station').run(id, stageId, station);
+      if (!stage || (stage.status !== 'active' && !(stage.status == null && first?.id === stageId))) return reply.code(409).send({ error: 'Only the active stage can be shown on the TV.' });
+      const wheelSettings = db.prepare('SELECT settings FROM stage_settings WHERE stage_id = ?').get(stageId);
+      const viewSettings = wheelSettings ? JSON.parse(String(wheelSettings.settings)) : null;
+      const configuredStations = stage.kind === 'two-station' ? viewSettings?.stations ?? [{ games: [] }, { games: [] }] : viewSettings?.gameSelection === 'pool' ? [{ games: viewSettings.gamePool ?? [] }] : [];
+      if (!configuredStations?.[station as number]) return reply.code(400).send({ error: 'Invalid station.' });
+      db.prepare('INSERT INTO display_wheels VALUES (?, ?, ?) ON CONFLICT(tournament_id) DO UPDATE SET stage_id = excluded.stage_id, station = excluded.station').run(id, stageId, station as number);
     } else return reply.code(400).send({ error: 'Choose a wheel or the ranking.' });
     changed(id); return { ok: true };
   });
@@ -118,6 +148,7 @@ export async function createApp(databasePath = 'data/retromania.sqlite') {
     const id = request.params.id;
     if (!authorized(request.headers.authorization, id)) return reply.code(401).send({ error: 'Administrator access required.' });
     if (db.prepare("SELECT 1 FROM stage_progress JOIN stages ON stages.id = stage_progress.stage_id WHERE stages.tournament_id = ? AND stage_progress.status = 'closed' LIMIT 1").get(id)) return reply.code(409).send({ error: 'Adding participants after a stage closes is not supported yet.' });
+    if (db.prepare("SELECT 1 FROM stages JOIN stage_progress ON stage_progress.stage_id = stages.id WHERE stages.tournament_id = ? AND stages.kind = 'elimination' AND stage_progress.status = 'active' AND stage_progress.source_stage_id IS NULL").get(id)) return reply.code(409).send({ error: 'Players cannot be added to an elimination stage after it has started.' });
     const name = text(request.body?.displayName, 100), real = request.body?.realName;
     if (!name || (real !== undefined && (typeof real !== 'string' || real.trim().length > 100))) return reply.code(400).send({ error: 'Enter a display name of up to 100 characters.' });
     const participantId = randomUUID();
@@ -141,6 +172,7 @@ export async function createApp(databasePath = 'data/retromania.sqlite') {
     const { id, participantId } = request.params;
     if (!authorized(request.headers.authorization, id)) return reply.code(401).send({ error: 'Administrator access required.' });
     if (db.prepare('SELECT 1 FROM stages WHERE tournament_id = ? AND (EXISTS (SELECT 1 FROM attempts WHERE stage_id = stages.id) OR EXISTS (SELECT 1 FROM stage_forfeits WHERE stage_id = stages.id) OR EXISTS (SELECT 1 FROM stage_results WHERE stage_id = stages.id)) LIMIT 1').get(id)) return reply.code(409).send({ error: 'Participants cannot be removed after results are entered. Withdrawal is not available yet.' });
+    if (db.prepare("SELECT 1 FROM stage_entrants JOIN stage_progress ON stage_progress.stage_id = stage_entrants.stage_id WHERE participant_id = ? AND stage_progress.status = 'active'").get(participantId)) return reply.code(409).send({ error: 'Players cannot be removed from an active stage. Use withdrawal instead.' });
     const result = db.prepare('DELETE FROM participants WHERE id = ? AND tournament_id = ?').run(participantId, id);
     if (!result.changes) return reply.code(404).send({ error: 'Participant not found.' }); changed(id); return { ok: true };
   });

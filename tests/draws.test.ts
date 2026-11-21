@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { createApp } from '../server/src/app';
 
 describe('station draws', () => {
-  it('requires admin, persists confirmation, rejects duplicates and protects fixed pools', async () => {
+  it('requires admin, persists confirmation, allows duplicate games and protects fixed pools', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'retromania-draw-')); const path = join(dir, 'db.sqlite');
     let app = await createApp(path);
     try {
@@ -25,9 +25,9 @@ describe('station draws', () => {
       expect((await app.inject({ method: 'POST', url: `${first}/confirm`, headers, payload: { drawId: spin.drawId } })).statusCode).toBe(409);
       expect((await app.inject({ method: 'POST', url: `${first}/confirm`, payload: { drawId: next.drawId } })).statusCode).toBe(200);
       const secondSpin = (await app.inject({ method: 'POST', url: `${second}/spin`, headers })).json();
-      expect((await app.inject({ method: 'POST', url: `${second}/confirm`, headers, payload: { drawId: secondSpin.drawId } })).statusCode).toBe(409);
+      expect((await app.inject({ method: 'POST', url: `${second}/confirm`, headers, payload: { drawId: secondSpin.drawId } })).statusCode).toBe(200);
       const publicStage = (await app.inject({ method: 'GET', url: `/api/tournaments/${id}` })).json().stages[0];
-      expect(publicStage.draws).toHaveLength(2); expect(publicStage.draws[0].confirmed).toBe(true); expect(publicStage.draws[1].confirmed).toBe(false);
+      expect(publicStage.draws).toHaveLength(2); expect(publicStage.draws[0].confirmed).toBe(true); expect(publicStage.draws[1].confirmed).toBe(true);
       const modified = structuredClone(settings); modified.stations[0].games[0].name = 'Other';
       expect((await app.inject({ method: 'PUT', url: `${base}/${stage}/settings`, headers, payload: modified })).statusCode).toBe(409);
       await app.close(); app = await createApp(path);

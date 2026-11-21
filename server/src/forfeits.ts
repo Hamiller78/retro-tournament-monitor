@@ -34,7 +34,7 @@ export function registerForfeitRoutes(app: FastifyInstance, db: DatabaseSync, au
       if (!result.changes) { db.exec('ROLLBACK'); return reply.code(404).send({ error: 'Forfeit not found.' }); }
       const settingsRow = db.prepare('SELECT settings FROM stage_settings WHERE stage_id = ?').get(stageId);
       const settings = settingsRow ? JSON.parse(String(settingsRow.settings)) : null;
-      for (const station of [0, 1]) {
+      for (const station of (settings?.stations ?? []).map((_: unknown, i: number) => i)) {
         const draw = db.prepare('SELECT game_index FROM station_draws WHERE stage_id = ? AND station = ? AND confirmed = 1').get(stageId, station);
         const required = draw ? settings?.stations?.[station]?.games?.[Number(draw.game_index)]?.attempts : null;
         const count = Number(db.prepare('SELECT COUNT(*) AS count FROM attempts WHERE stage_id = ? AND station = ? AND participant_id = ?').get(stageId, station, participantId)?.count);

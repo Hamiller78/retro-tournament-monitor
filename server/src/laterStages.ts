@@ -6,9 +6,19 @@ type Params = { id: string; stageId: string };
 export function laterOutcome(db: DatabaseSync, stageId: string) {
   const stage = db.prepare('SELECT stages.kind, stage_settings.settings FROM stages LEFT JOIN stage_settings ON stage_settings.stage_id = stages.id WHERE stages.id = ?').get(stageId);
   if (!stage || !['elimination', 'duel', 'tie-breaker'].includes(String(stage.kind))) return null;
-  const entrants = db.prepare('SELECT participants.id, participants.display_name AS displayName, EXISTS(SELECT 1 FROM withdrawals WHERE participant_id = participants.id) AS withdrawn FROM stage_entrants JOIN participants ON participants.id = stage_entrants.participant_id WHERE stage_entrants.stage_id = ? ORDER BY stage_entrants.position').all(stageId).map(row => ({ id: String(row.id), displayName: String(row.displayName), withdrawn: Boolean(row.withdrawn) }));
+  const isUnstartedFirstElimination = stage.kind === 'elimination' && !!db.prepare("SELECT 1 FROM stages s WHERE s.id = ? AND s.id = (SELECT id FROM stages WHERE tournament_id = s.tournament_id AND kind != 'tie-breaker' ORDER BY position LIMIT 1) AND NOT EXISTS (SELECT 1 FROM stage_progress WHERE stage_id = s.id)").get(stageId);
+  const entrantRows = isUnstartedFirstElimination
+    ? db.prepare('SELECT participants.id, participants.display_name AS displayName, EXISTS(SELECT 1 FROM withdrawals WHERE participant_id = participants.id) AS withdrawn FROM participants JOIN stages ON stages.tournament_id = participants.tournament_id WHERE stages.id = ? ORDER BY participants.rowid').all(stageId)
+    : db.prepare('SELECT participants.id, participants.display_name AS displayName, EXISTS(SELECT 1 FROM withdrawals WHERE participant_id = participants.id) AS withdrawn FROM stage_entrants JOIN participants ON participants.id = stage_entrants.participant_id WHERE stage_entrants.stage_id = ? ORDER BY stage_entrants.position').all(stageId);
+  const entrants = entrantRows.map(row => ({ id: String(row.id), displayName: String(row.displayName), withdrawn: Boolean(row.withdrawn) }));
   const results = db.prepare('SELECT id, participant_id AS participantId, position FROM stage_results WHERE stage_id = ? ORDER BY position').all(stageId).map(row => ({ id: String(row.id), participantId: String(row.participantId), position: Number(row.position) }));
   const settings = stage.settings ? JSON.parse(String(stage.settings)) : null;
+  if (settings?.gameSelection) {
+    const draw = db.prepare('SELECT game_index FROM station_draws WHERE stage_id = ? AND station = 0 AND confirmed = 1').get(stageId);
+    const names = settings.gameSelection === 'pool' ? settings.gamePool ?? [] : [settings.game];
+    const chosen = draw ? names[Number(draw.game_index)] : null;
+    settings.game = typeof chosen === 'string' ? chosen : chosen?.name ?? '';
+  }
   if (stage.kind === 'tie-breaker') {
     const link = db.prepare('SELECT tie_resolutions.source_stage_id, tie_resolutions.slots, stages.tournament_id FROM tie_resolutions JOIN stages ON stages.id = tie_resolutions.tie_stage_id WHERE tie_resolutions.tie_stage_id = ?').get(stageId);
     const selection = link ? eligiblePlayers(db, String(link.tournament_id), String(link.source_stage_id), Number(link.slots)) : null;
@@ -45,7 +55,10 @@ export function registerLaterStageRoutes(app: FastifyInstance, db: DatabaseSync,
   app.post<{ Params: Params; Body: { participantId?: unknown; requestId?: unknown } }>('/api/tournaments/:id/stages/:stageId/outcome', async (request, reply) => {
     const { id, stageId } = request.params, outcome = get(id, stageId);
     if (!outcome) return reply.code(404).send({ error: 'Stage not found.' });
-    if (db.prepare('SELECT status FROM stage_progress WHERE stage_id = ?').get(stageId)?.status !== 'active') return reply.code(409).send({ error: 'This stage is not active.' });
+    const status = db.prepare('SELECT status FROM stage_progress WHERE stage_id = ?').get(stageId)?.status;
+    const first = db.prepare("SELECT id FROM stages WHERE tournament_id = ? AND kind != 'tie-breaker' ORDER BY position LIMIT 1").get(id);
+    const startFirstElimination = !status && first?.id === stageId && outcome.kind === 'elimination';
+    if (status !== 'active' && !startFirstElimination) return reply.code(409).send({ error: 'This stage is not active.' });
     const { participantId, requestId } = request.body ?? {};
     if (typeof participantId !== 'string' || typeof requestId !== 'string' || !/^[a-f0-9-]{36}$/i.test(requestId) || !outcome.entrants.some(player => player.id === participantId)) return reply.code(400).send({ error: 'Choose a player in this stage.' });
     if (outcome.entrants.some(player => player.id === participantId && player.withdrawn)) return reply.code(409).send({ error: 'This player has withdrawn.' });
@@ -56,7 +69,17 @@ export function registerLaterStageRoutes(app: FastifyInstance, db: DatabaseSync,
     if (outcome.complete) return reply.code(409).send({ error: 'All results are already recorded.' });
     if ((outcome.kind === 'elimination' || outcome.kind === 'tie-breaker') && (outcome.entrants.length < 2 || outcome.results.some(result => result.participantId === participantId))) return reply.code(409).send({ error: 'Choose a player who has not been eliminated.' });
     if (outcome.kind === 'duel' && (outcome.entrants.length !== 2 || !outcome.bestOf)) return reply.code(409).send({ error: 'Configure a two-player duel and match format first.' });
-    db.prepare('INSERT INTO stage_results VALUES (?, ?, (SELECT COALESCE(MAX(position), -1) + 1 FROM stage_results WHERE stage_id = ?), ?)').run(requestId, stageId, stageId, participantId);
+    db.exec('BEGIN');
+    try {
+      if (startFirstElimination) {
+        db.prepare("INSERT INTO stage_progress (stage_id, status, source_stage_id) VALUES (?, 'active', NULL)").run(stageId);
+        const insert = db.prepare('INSERT INTO stage_entrants (stage_id, participant_id, position) VALUES (?, ?, ?)');
+        outcome.entrants.forEach((person, position) => insert.run(stageId, person.id, position));
+      }
+      db.prepare('INSERT INTO stage_results VALUES (?, ?, (SELECT COALESCE(MAX(position), -1) + 1 FROM stage_results WHERE stage_id = ?), ?)').run(requestId, stageId, stageId, participantId);
+      db.prepare('INSERT OR IGNORE INTO tournament_game_locks VALUES (?)').run(id);
+      db.exec('COMMIT');
+    } catch (error) { db.exec('ROLLBACK'); throw error; }
     changed(id); return reply.code(201).send({ ok: true });
   });
   app.put<{ Params: Params & { resultId: string }; Body: { participantId?: unknown } }>('/api/tournaments/:id/stages/:stageId/outcome/:resultId', async (request, reply) => {

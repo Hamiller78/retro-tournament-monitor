@@ -3,6 +3,7 @@ import type { Stage, Tournament } from '../../shared/contracts';
 import { LeaderboardView } from './LeaderboardView';
 import { useRankingAnimation } from './useRankingAnimation';
 import { GameWheel } from './GameWheel';
+import { stageGameWheel } from './stageGameWheel';
 
 type Person = { id: string; displayName: string; withdrawn?: boolean };
 type Outcome = { kind: 'elimination' | 'duel' | 'tie-breaker'; entrants: Person[]; results: { participantId: string }[]; complete: boolean; ranking: string[]; eligibleIds?: string[]; needsTie?: boolean; blockedReason?: string | null };
@@ -71,7 +72,8 @@ export function DisplayApp({ tournamentId }: { tournamentId: string }) {
     return () => { current = false; };
   }, [tournamentId, revision]);
   const stage = tournament?.stages.find(item => item.status === 'active') ?? tournament?.stages.filter(item => item.status === 'closed').at(-1);
-  const wheel = stage?.kind === 'two-station' && stage.status === 'active' && tournament?.displayWheel?.stageId === stage.id ? tournament.displayWheel : null;
+  const wheel = stage?.status === 'active' && tournament?.displayWheel?.stageId === stage.id ? tournament.displayWheel : null;
+  const wheelStage = stage?.kind === 'two-station' ? stage : stage ? stageGameWheel(stage) : null;
   if (winner) return <main className="arcade-app tv-display tv-winner" aria-label="Tournament winner">
     {!connected && <span className="tv-winner-status" role="status">Disconnected · reconnecting…</span>}
     <section className="arcade-winner tv-winner-card">
@@ -85,6 +87,6 @@ export function DisplayApp({ tournamentId }: { tournamentId: string }) {
   return <main className="arcade-app tv-display">
     <header className="display-header"><div><span className="display-brand">RETROMANIA</span><h1>{stage?.name ?? tournament?.name ?? 'Tournament display'}</h1></div><div className="display-header-meta">{stage?.status === 'closed' ? 'Final standings' : stage ? 'Live' : ''}{!connected && <span role="status">Disconnected · reconnecting…</span>}</div></header>
     {error && <p className="display-message" role="status">{error}</p>}
-    {!stage ? <p className="display-message">{tournament ? 'No active stage yet.' : 'Loading tournament…'}</p> : wheel ? <div className="display-wheel"><GameWheel key={`${stage.id}-${wheel.station}`} stage={stage} station={wheel.station} tournamentId={tournamentId} token="" onError={() => {}} onChange={() => {}} displayOnly /></div> : stage.kind === 'two-station' ? <LeaderboardView key={stage.id} tournamentId={tournamentId} stageId={stage.id} status={stage.status} revision={revision} displayOnly /> : <LaterDisplay key={stage.id} tournamentId={tournamentId} stage={stage} revision={revision} />}
+    {!stage ? <p className="display-message">{tournament ? 'No active stage yet.' : 'Loading tournament…'}</p> : wheel && wheelStage ? <div className="display-wheel"><GameWheel key={`${stage.id}-${wheel.station}`} stage={wheelStage} station={wheel.station} label={stage.kind === 'two-station' ? undefined : stage.name} tournamentId={tournamentId} token="" onError={() => {}} onChange={() => {}} displayOnly /></div> : stage.kind === 'two-station' ? <LeaderboardView key={stage.id} tournamentId={tournamentId} stageId={stage.id} status={stage.status} revision={revision} displayOnly /> : <LaterDisplay key={stage.id} tournamentId={tournamentId} stage={stage} revision={revision} />}
   </main>;
 }

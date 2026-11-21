@@ -74,9 +74,11 @@ export function advanceStage(db: DatabaseSync, id: string, stageId: string, back
     return { ok: true, nextStageId: tieStageId, winnerId: null, tieBreakerActivated: true, warning: saveBackup(db, id, stageId, backupDirectory, logError) };
   }
   if (!selection.players) return { ok: false, status: 409, error: selection.error ?? 'Cannot advance this stage.' };
+  const initialEntrants = !state && index === 0 && current.kind === 'elimination' ? laterOutcome(db, stageId)?.entrants : undefined;
   db.exec('BEGIN');
   try {
     db.prepare("INSERT INTO stage_progress(stage_id, status, source_stage_id) VALUES (?, 'closed', NULL) ON CONFLICT(stage_id) DO UPDATE SET status = 'closed'").run(stageId);
+    if (initialEntrants) { const insert = db.prepare('INSERT INTO stage_entrants (stage_id, participant_id, position) VALUES (?, ?, ?)'); initialEntrants.forEach((person, position) => insert.run(stageId, person.id, position)); }
     if (next) {
       db.prepare("INSERT INTO stage_progress(stage_id, status, source_stage_id) VALUES (?, 'active', ?)").run(next.id as string, stageId);
       const insert = db.prepare('INSERT INTO stage_entrants(stage_id, participant_id, position) VALUES (?, ?, ?)');

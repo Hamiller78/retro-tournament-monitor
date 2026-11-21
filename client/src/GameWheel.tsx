@@ -3,9 +3,11 @@ import type { Stage } from '../../shared/contracts';
 import { useSound } from './Sound';
 
 const colors = ['#7c3aed', '#be185d', '#0369a1', '#047857', '#b45309', '#4338ca', '#9f1239', '#0f766e'];
-type Props = { stage: Stage; station: number; tournamentId: string; token: string; onError: (message: string) => void; onChange: () => void; displayOnly?: boolean };
-export function GameWheel({ stage, station, tournamentId, token, onError, onChange, displayOnly = false }: Props) {
+type Props = { stage: Stage; station: number; tournamentId: string; token: string; onError: (message: string) => void; onChange: () => void; displayOnly?: boolean; label?: string };
+export function GameWheel({ stage, station, tournamentId, token, onError, onChange, displayOnly = false, label }: Props) {
+  const heading = label ?? `Station ${station + 1}`;
   const games = stage.settings?.stations?.[station]?.games ?? [];
+  const fixed = stage.settings?.stations?.[station]?.mode === 'fixed';
   const draw = stage.draws.find(item => item.station === station);
   const game = draw ? games[draw.gameIndex] : undefined;
   const initialRotation = draw && games.length ? (270 - (draw.gameIndex + 0.5) * 360 / games.length + 360) % 360 : 0;
@@ -20,6 +22,7 @@ export function GameWheel({ stage, station, tournamentId, token, onError, onChan
   const angle = useRef(initialRotation);
   useEffect(() => () => { clearTimeout(timer.current); if (frame.current !== undefined) cancelAnimationFrame(frame.current); }, []);
   useEffect(() => {
+    if (fixed) { lastDraw.current = draw?.drawId; setSpinning(false); return; }
     if (!draw || !games.length) { lastDraw.current = undefined; clearTimeout(timer.current); if (frame.current !== undefined) cancelAnimationFrame(frame.current); setSpinning(false); return; }
     if (draw.drawId === lastDraw.current) return;
     lastDraw.current = draw.drawId;
@@ -46,7 +49,7 @@ export function GameWheel({ stage, station, tournamentId, token, onError, onChan
     }
     frame.current = requestAnimationFrame(followWheel);
     timer.current = setTimeout(() => { if (frame.current !== undefined) cancelAnimationFrame(frame.current); frame.current = undefined; setSpinning(false); reveal(); }, 3200);
-  }, [draw?.drawId, draw?.gameIndex, games.length, tick, reveal]);
+  }, [draw?.drawId, draw?.gameIndex, games.length, fixed, tick, reveal]);
   async function action(actionName: string, body?: object) {
     setBusy(true); onError('');
     try {
@@ -56,9 +59,10 @@ export function GameWheel({ stage, station, tournamentId, token, onError, onChan
       onChange();
     } catch (error) { onError((error as Error).message); } finally { setBusy(false); }
   }
+  if (fixed) return <section aria-label={`${heading} game`} className="arcade-wheel-panel rounded-xl border border-slate-700 bg-slate-950 p-6"><h4 className="arcade-wheel-title text-lg font-bold">{heading}</h4><p className="mt-4 text-xl">{games[0]?.name ?? 'Add a fixed game in settings.'}</p></section>;
   const background = games.length ? `conic-gradient(${games.map((_, index) => `${colors[index % colors.length]} ${index * 100 / games.length}% ${(index + 1) * 100 / games.length}%`).join(', ')})` : '#334155';
-  return <section aria-label={`Station ${station + 1} wheel`} className="arcade-wheel-panel rounded-xl border border-slate-700 bg-slate-950 p-4">
-    <h4 className="arcade-wheel-title text-lg font-bold">Station {station + 1}</h4>
+  return <section aria-label={`${heading} wheel`} className="arcade-wheel-panel rounded-xl border border-slate-700 bg-slate-950 p-4">
+    <h4 className="arcade-wheel-title text-lg font-bold">{heading}</h4>
     <div className="wheel-layout"><div className="wheel-shell mx-auto mt-4"><div className="wheel-pointer" aria-hidden="true"/><div ref={wheelRef} className={`wheel ${spinning ? 'wheel-spinning' : ''}`} style={{ background, transform: `rotate(${rotation}deg)` }} aria-hidden="true">{games.map((item, index) => <div className="wheel-label" key={`${index}-${item.name}`} style={{ transform: `translate(-100%, -50%) rotate(${(index + 0.5) * 360 / games.length - 270}deg)`, fontSize: `clamp(0.45rem, ${Math.max(0.9, Math.min(5.2, 65 / Math.max(item.name.length, 1), 70 / games.length))}cqw, 2.5rem)` }}><span>{item.name}</span></div>)}</div></div>
     <div className="wheel-info"><p className="wheel-result mt-4 min-h-8 text-center text-xl font-bold sm:text-2xl" aria-live="polite">{spinning ? 'Spinning…' : game ? `${draw?.confirmed ? 'Selected' : 'Drawn'}: ${game.name}` : games.length ? 'Ready to spin' : 'Add games to this station’s pool.'}</p>
     {draw?.confirmed && game && <section className="game-info mt-5 rounded-lg border border-violet-500 bg-slate-900 p-4 text-left" aria-label="Selected game information">

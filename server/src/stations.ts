@@ -34,7 +34,8 @@ export function registerStationRoutes(app: FastifyInstance, db: DatabaseSync, au
     });
     return { total: people.length, pending: pending.length };
   }
-  function stationIndex(value: string) { return value === '0' || value === '1' ? Number(value) : -1; }
+  function stationIndex(value: string) { return /^(0|[1-9]\d*)$/.test(value) && Number.isSafeInteger(Number(value)) ? Number(value) : -1; }
+  function allStationsClosed(stageId: string) { const row = db.prepare('SELECT settings FROM stage_settings WHERE stage_id = ?').get(stageId); const stations = row ? (JSON.parse(String(row.settings)) as StageSettings).stations : undefined; return !!stations?.length && stations.every((_, index) => isStationClosed(stageId, index)); }
   function owns(header: string | undefined, stageId: string, station: number) { return !!header && stationRow(stageId, station)?.token === header; }
   app.get<{ Params: Params }>('/api/tournaments/:id/stages/:stageId/stations/:station', async (request, reply) => {
     const { id, stageId, station: raw } = request.params; const station = stationIndex(raw);
@@ -50,7 +51,7 @@ export function registerStationRoutes(app: FastifyInstance, db: DatabaseSync, au
       ...players.filter(p => forfeits.has(p.participantId)).map(p => ({ ...p, best: null, rank: null, forfeited: true, withdrawn: withdrawn.has(p.participantId) })),
     ];
     const session = stationRow(stageId, station);
-    return { game: selected, activeParticipant: session?.active_participant ?? null, activeParticipants: [session?.active_participant, session?.active_participant2].filter(Boolean), locked: !!session, controlled: owns(request.headers['x-station-token'] as string | undefined, stageId, station), stationClosed: isStationClosed(stageId, station), bothStationsClosed: isStationClosed(stageId, 0) && isStationClosed(stageId, 1), ...pendingPlayers(id, stageId, station, selected.attempts), ranking, entries };
+    return { game: selected, activeParticipant: session?.active_participant ?? null, activeParticipants: [session?.active_participant, session?.active_participant2].filter(Boolean), locked: !!session, controlled: owns(request.headers['x-station-token'] as string | undefined, stageId, station), stationClosed: isStationClosed(stageId, station), bothStationsClosed: allStationsClosed(stageId), ...pendingPlayers(id, stageId, station, selected.attempts), ranking, entries };
   });
   app.post<{ Params: Params }>('/api/tournaments/:id/stages/:stageId/stations/:station/close', async (request, reply) => {
     const { id, stageId, station: raw } = request.params; const station = stationIndex(raw);
@@ -67,7 +68,7 @@ export function registerStationRoutes(app: FastifyInstance, db: DatabaseSync, au
       db.exec('COMMIT');
     } catch (error) { db.exec('ROLLBACK'); throw error; }
     let warning: string | undefined; let advanced = false; let winnerDetermined = false; let tieBreakerActivated = false;
-    if (isStationClosed(stageId, 0) && isStationClosed(stageId, 1)) {
+    if (allStationsClosed(stageId)) {
       try {
         const result = advanceStage(db, id, stageId, backupDirectory, error => request.log.error(error));
         if (result.ok) { advanced = true; winnerDetermined = result.nextStageId === null; tieBreakerActivated = !!result.tieBreakerActivated; warning = result.warning; }
@@ -157,6 +158,7 @@ export function registerStationRoutes(app: FastifyInstance, db: DatabaseSync, au
       db.prepare('INSERT INTO attempt_batches VALUES (?, ?, ?, ?)').run(requestId, stageId, station, payload);
       const insert = db.prepare('INSERT INTO attempts VALUES (?, ?, ?, ?, ?, ?)');
       for (const record of records) insert.run(randomUUID(), stageId, station, record.participantId, record.attempt, record.value);
+      db.prepare('INSERT OR IGNORE INTO tournament_game_locks VALUES (?)').run(id);
       db.exec('COMMIT');
     } catch (error) { db.exec('ROLLBACK'); throw error; }
     changed(id); return reply.code(201).send({ ok: true });
@@ -178,7 +180,9 @@ export function registerStationRoutes(app: FastifyInstance, db: DatabaseSync, au
     const used = db.prepare('SELECT attempt FROM attempts WHERE stage_id = ? AND station = ? AND participant_id = ?').all(stageId, station, participantId).map(r => Number(r.attempt));
     const next = Array.from({ length: selected.attempts }, (_, i) => i + 1).find(n => !used.includes(n));
     if (!next) return reply.code(409).send({ error: 'This player has completed all attempts.' });
-    db.prepare('INSERT INTO attempts VALUES (?, ?, ?, ?, ?, ?)').run(requestId, stageId, station, participantId, next, value); changed(id); return reply.code(201).send({ ok: true });
+    db.exec('BEGIN');
+    try { db.prepare('INSERT INTO attempts VALUES (?, ?, ?, ?, ?, ?)').run(requestId, stageId, station, participantId, next, value); db.prepare('INSERT OR IGNORE INTO tournament_game_locks VALUES (?)').run(id); db.exec('COMMIT'); } catch (error) { db.exec('ROLLBACK'); throw error; }
+    changed(id); return reply.code(201).send({ ok: true });
   });
   app.delete<{ Params: Params & { participantId: string; attempt: string } }>('/api/tournaments/:id/stages/:stageId/stations/:station/attempts/:participantId/:attempt', async (request, reply) => {
     const { id, stageId, station: raw, participantId, attempt } = request.params; const station = stationIndex(raw);

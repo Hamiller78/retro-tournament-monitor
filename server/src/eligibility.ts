@@ -25,8 +25,8 @@ export function eligiblePlayers(db: DatabaseSync, tournamentId: string, stageId:
   if (!data) return { error: 'This stage is not ready for advancement.' };
   const settings = JSON.parse(String(data.settings)) as StageSettings;
   const draws = db.prepare('SELECT station, game_index AS gameIndex FROM station_draws WHERE stage_id = ? AND confirmed = 1').all(stageId);
-  const games = [0, 1].map(station => { const draw = draws.find(d => d.station === station); return draw ? settings.stations?.[station]?.games[Number(draw.gameIndex)] ?? null : null; });
-  if (!games[0] || !games[1] || !settings.points?.length) return { error: 'Confirm both station games and configure a points schedule first.' };
+  const games = (settings.stations ?? []).map((_, station) => station).map(station => { const draw = draws.find(d => d.station === station); return draw ? settings.stations?.[station]?.games[Number(draw.gameIndex)] ?? null : null; });
+  if (!games.length || games.some(game => !game) || !settings.points?.length) return { error: 'Confirm all station games and configure a points schedule first.' };
   const assigned = db.prepare('SELECT participant_id FROM stage_entrants WHERE stage_id = ?').all(stageId).map(row => String(row.participant_id));
   const prior = db.prepare('SELECT source_stage_id FROM stage_progress WHERE stage_id = ?').get(stageId);
   const people = db.prepare('SELECT id AS participantId, display_name AS displayName FROM participants WHERE tournament_id = ?').all(tournamentId)
@@ -35,7 +35,7 @@ export function eligiblePlayers(db: DatabaseSync, tournamentId: string, stageId:
   if (!people.length) return { error: 'Add participants before closing this stage.' };
   const entries = db.prepare('SELECT participant_id AS participantId, station, value FROM attempts WHERE stage_id = ?').all(stageId).map(row => ({ participantId: String(row.participantId), station: Number(row.station), value: Number(row.value) }));
   const forfeits = new Set(db.prepare('SELECT participant_id FROM stage_forfeits WHERE stage_id = ? UNION SELECT participant_id FROM withdrawals').all(stageId).map(row => String(row.participant_id)));
-  for (const player of people) if (!forfeits.has(player.participantId)) for (const station of [0, 1]) {
+  for (const player of people) if (!forfeits.has(player.participantId)) for (const station of games.map((_, i) => i)) {
     const count = entries.filter(entry => entry.participantId === player.participantId && entry.station === station).length;
     if (count < games[station]!.attempts) return { error: 'Every player needs all attempts recorded or an explicit stage forfeit before closing.' };
   }

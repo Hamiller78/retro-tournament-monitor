@@ -8,24 +8,25 @@ const id = z.uuid();
 const name = z.string().trim().min(1).max(100);
 const game = z.object({ name, resultKind: z.enum(['score', 'time']), higherIsBetter: z.boolean(), attempts: z.number().int().min(1).max(100), players: z.union([z.literal(1), z.literal(2)]).optional(), developer: z.string().max(100).optional(), platform: z.string().max(100).optional(), releaseYear: z.number().int().min(1).max(9999).optional(), description: z.string().max(1000).optional() });
 const settings = z.union([
-  z.object({ stations: z.tuple([z.object({ games: z.array(game).max(100) }), z.object({ games: z.array(game).max(100) })]), points: z.array(z.number().int().min(0).max(1000000)).max(999) }),
-  z.object({ game: z.string().max(100), bestOf: z.union([z.literal(1), z.literal(3), z.literal(5)]).optional() }),
+  z.object({ stations: z.array(z.object({ games: z.array(game).max(100), mode: z.enum(['pool', 'fixed']).optional() })).min(1).max(999), points: z.array(z.number().int().min(0).max(1000000)).max(999) }),
+  z.object({ game: z.string().max(100), bestOf: z.union([z.literal(1), z.literal(3), z.literal(5)]).optional(), gameSelection: z.enum(['fixed', 'pool']).optional(), gamePool: z.array(z.union([name, z.object({ name, developer: z.string().max(100).optional(), platform: z.string().max(100).optional(), releaseYear: z.number().int().min(1).max(9999).optional(), description: z.string().max(1000).optional() })])).max(100).optional() }),
 ]);
 const schema = z.object({
   format: z.literal('retromania-tournament'), version: z.literal(1),
   tournament: z.object({ name, pinSalt: z.string().regex(/^[0-9a-f]{32}$/), pinHash: z.string().regex(/^[0-9a-f]{64}$/) }),
   trophyImage: z.string().refine(validTrophy).nullable().default(null),
+  gameSelectionStarted: z.boolean().optional(),
   participants: z.array(z.object({ id, displayName: name, realName: z.string().max(100).nullable() })).max(1000),
   stages: z.array(z.object({ id, name, kind: z.enum(['two-station', 'elimination', 'duel', 'tie-breaker']), participantCount: z.number().int().min(1).max(999).nullable(), position: z.number().int().min(0).max(10000), settings: settings.nullable() })).max(100),
-  draws: z.array(z.object({ stageId: id, station: z.union([z.literal(0), z.literal(1)]), gameIndex: z.number().int().min(0), confirmed: z.union([z.literal(0), z.literal(1)]) })).max(200),
-  attempts: z.array(z.object({ stageId: id, station: z.union([z.literal(0), z.literal(1)]), participantId: id, attempt: z.number().int().min(1).max(100), value: z.number().min(0).max(1000000000) })).max(200000),
+  draws: z.array(z.object({ stageId: id, station: z.number().int().min(0).max(998), gameIndex: z.number().int().min(0), confirmed: z.number().int().min(0).max(998) })).max(99900),
+  attempts: z.array(z.object({ stageId: id, station: z.number().int().min(0).max(998), participantId: id, attempt: z.number().int().min(1).max(100), value: z.number().min(0).max(1000000000) })).max(200000),
   withdrawals: z.array(z.object({ participantId: id, stageId: id.nullable() })).max(1000).default([]),
   withdrawalReplacements: z.array(z.object({ participantId: id, stageId: id, replacementId: id })).max(1000).default([]),
   forfeits: z.array(z.object({ stageId: id, participantId: id })).max(100000),
   progress: z.array(z.object({ stageId: id, status: z.enum(['active', 'closed']), sourceStageId: id.nullable() })).max(100).default([]),
   entrants: z.array(z.object({ stageId: id, participantId: id, position: z.number().int().min(0).max(999) })).max(100000).default([]),
   stageResults: z.array(z.object({ stageId: id, participantId: id, position: z.number().int().min(0).max(10000) })).max(100000).default([]),
-  stationCompletions: z.array(z.object({ stageId: id, station: z.union([z.literal(0), z.literal(1)]) })).max(200).default([]),
+  stationCompletions: z.array(z.object({ stageId: id, station: z.number().int().min(0).max(998) })).max(99900).default([]),
   tieResolutions: z.array(z.object({ tieStageId: id, sourceStageId: id, targetStageId: id.nullable(), slots: z.number().int().min(1).max(999) })).max(100).default([]),
 });
 type Backup = z.infer<typeof schema>;
@@ -46,7 +47,8 @@ export function exportTournament(db: DatabaseSync, tournamentId: string) {
   const stationCompletions = db.prepare('SELECT station_completions.stage_id AS stageId, station FROM station_completions JOIN stages ON stages.id = station_completions.stage_id WHERE stages.tournament_id = ?').all(tournamentId);
   const tieResolutions = db.prepare('SELECT tie_stage_id AS tieStageId, source_stage_id AS sourceStageId, target_stage_id AS targetStageId, slots FROM tie_resolutions JOIN stages ON stages.id = tie_resolutions.tie_stage_id WHERE stages.tournament_id = ?').all(tournamentId);
   const trophyImage = db.prepare('SELECT data FROM trophy_images WHERE tournament_id = ?').get(tournamentId)?.data ?? null;
-  return { format: 'retromania-tournament', version: 1, tournament, trophyImage, participants, stages, draws, attempts, withdrawals, withdrawalReplacements, forfeits, progress, entrants, stageResults, stationCompletions, tieResolutions };
+  const gameSelectionStarted = !!db.prepare('SELECT 1 FROM tournament_game_locks WHERE tournament_id = ?').get(tournamentId);
+  return { format: 'retromania-tournament', version: 1, tournament, trophyImage, gameSelectionStarted, participants, stages, draws, attempts, withdrawals, withdrawalReplacements, forfeits, progress, entrants, stageResults, stationCompletions, tieResolutions };
 }
 function isConsistent(backup: Backup) {
   const stages = new Map(backup.stages.map(stage => [stage.id, stage]));
@@ -55,12 +57,15 @@ function isConsistent(backup: Backup) {
   for (const stage of backup.stages) {
     if (!stage.settings) continue;
     if (stage.kind === 'two-station' ? !('stations' in stage.settings) : !('game' in stage.settings)) return false;
+    if ('stations' in stage.settings && stage.settings.stations.some(station => station.mode === 'fixed' && station.games.length !== 1)) return false;
     if (stage.kind === 'duel' && (!('bestOf' in stage.settings) || stage.settings.bestOf == null)) return false;
   }
   const draws = new Map<string, typeof backup.draws[number]>();
   for (const draw of backup.draws) {
     const stage = stages.get(draw.stageId); const key = `${draw.stageId}:${draw.station}`;
-    if (!stage || stage.kind !== 'two-station' || !stage.settings || !('stations' in stage.settings) || !stage.settings.stations[draw.station].games[draw.gameIndex] || draws.has(key)) return false;
+    if (!stage || !stage.settings || draws.has(key)) return false;
+    if ('stations' in stage.settings) { if (stage.kind !== 'two-station' || !stage.settings.stations[draw.station]?.games[draw.gameIndex]) return false; }
+    else { const selection = stage.settings.gameSelection; const names = selection === 'pool' ? stage.settings.gamePool ?? [] : selection === 'fixed' ? [stage.settings.game] : []; if (stage.kind === 'two-station' || draw.station !== 0 || !names[draw.gameIndex]) return false; }
     draws.set(key, draw);
   }
   const attemptKeys = new Set<string>();
@@ -145,6 +150,7 @@ export function registerBackupRoutes(app: FastifyInstance, db: DatabaseSync, aut
     db.exec('BEGIN');
     try {
       db.prepare('INSERT INTO tournaments VALUES (?, ?, ?, ?)').run(tournamentId, `${backup.tournament.name.slice(0, 89)} (restored)`, backup.tournament.pinSalt, backup.tournament.pinHash);
+      if (backup.gameSelectionStarted ?? (backup.draws.some(draw => !!draw.confirmed) || backup.progress.length > 0)) db.prepare('INSERT INTO tournament_game_locks VALUES (?)').run(tournamentId);
       if (backup.trophyImage) db.prepare('INSERT INTO trophy_images (tournament_id, data) VALUES (?, ?)').run(tournamentId, backup.trophyImage);
       const insertPlayer = db.prepare('INSERT INTO participants VALUES (?, ?, ?, ?)');
       for (const p of backup.participants) insertPlayer.run(players.get(p.id)!, tournamentId, p.displayName, p.realName);
@@ -154,6 +160,12 @@ export function registerBackupRoutes(app: FastifyInstance, db: DatabaseSync, aut
       for (const item of backup.withdrawals) insertWithdrawal.run(players.get(item.participantId)!, item.stageId ? stages.get(item.stageId)! : null);
       const insertDraw = db.prepare('INSERT INTO station_draws VALUES (?, ?, ?, ?, ?)');
       for (const d of backup.draws) insertDraw.run(stages.get(d.stageId)!, d.station, randomUUID(), d.gameIndex, d.confirmed);
+      const insertFixed = db.prepare('INSERT OR IGNORE INTO station_draws VALUES (?, ?, ?, 0, 1)');
+      for (const stage of backup.stages) {
+        const settings = stage.settings; if (!settings) continue; const stageId = stages.get(stage.id)!;
+        if ('stations' in settings) settings.stations.forEach((station, index) => { if (station.mode === 'fixed' && station.games.length === 1) insertFixed.run(stageId, index, randomUUID()); });
+        else if (settings.gameSelection === 'fixed' && settings.game.trim()) insertFixed.run(stageId, 0, randomUUID());
+      }
       const insertAttempt = db.prepare('INSERT INTO attempts VALUES (?, ?, ?, ?, ?, ?)');
       for (const a of backup.attempts) insertAttempt.run(randomUUID(), stages.get(a.stageId)!, a.station, players.get(a.participantId)!, a.attempt, a.value);
       const insertForfeit = db.prepare('INSERT INTO stage_forfeits VALUES (?, ?)');

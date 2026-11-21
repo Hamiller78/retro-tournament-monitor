@@ -76,25 +76,46 @@ export function registerStageRoutes(app: FastifyInstance, db: DatabaseSync, auth
     const data = value as Record<string, unknown>;
     if (stage.kind === 'two-station') {
       const stations = data.stations, points = data.points;
-      if (!Array.isArray(stations) || stations.length !== 2 || !Array.isArray(points) || points.length > 999 || !points.every(p => Number.isSafeInteger(p) && p >= 0 && p <= 1000000)) return reply.code(400).send({ error: 'Check the station pools and points schedule.' });
+      if (!Array.isArray(stations) || stations.length < 1 || stations.length > 999 || !Array.isArray(points) || points.length > 999 || !points.every(p => Number.isSafeInteger(p) && p >= 0 && p <= 1000000)) return reply.code(400).send({ error: 'Check the station pools and points schedule.' });
       for (const station of stations) {
-        if (!station || typeof station !== 'object' || !Array.isArray(station.games) || station.games.length > 100) return reply.code(400).send({ error: 'Check the station pools.' });
+        if (!station || typeof station !== 'object' || !Array.isArray(station.games) || station.games.length > 100 || (station.mode !== undefined && !['pool', 'fixed'].includes(station.mode)) || (station.mode === 'fixed' && station.games.length !== 1)) return reply.code(400).send({ error: 'Check the station pools.' });
         for (const game of station.games) if (!game || typeof game.name !== 'string' || !game.name.trim() || game.name.trim().length > 100 || !['score', 'time'].includes(game.resultKind) || typeof game.higherIsBetter !== 'boolean' || (game.players !== undefined && game.players !== 1 && game.players !== 2) || !Number.isSafeInteger(game.attempts) || game.attempts < 1 || game.attempts > 100 || (game.developer !== undefined && (typeof game.developer !== 'string' || game.developer.length > 100)) || (game.platform !== undefined && (typeof game.platform !== 'string' || game.platform.length > 100)) || (game.releaseYear !== undefined && (!Number.isSafeInteger(game.releaseYear) || game.releaseYear < 1 || game.releaseYear > 9999)) || (game.description !== undefined && (typeof game.description !== 'string' || game.description.length > 1000))) return reply.code(400).send({ error: 'Check each game name, result type, and attempts.' });
       }
       const prior = db.prepare('SELECT settings FROM stage_settings WHERE stage_id = ?').get(stageId);
       const oldSettings = prior ? JSON.parse(String(prior.settings)) : null;
-      const changedPools = [0, 1].filter(station => JSON.stringify(oldSettings?.stations?.[station]?.games ?? []) !== JSON.stringify(stations[station].games));
-      for (const station of changedPools) if (db.prepare('SELECT 1 FROM station_draws WHERE stage_id = ? AND station = ? AND confirmed = 1').get(stageId, station)) return reply.code(409).send({ error: `Unlock station ${station + 1} before changing its confirmed game pool.` });
+      if ((oldSettings?.stations?.length ?? 2) !== stations.length && db.prepare('SELECT 1 FROM tournament_game_locks WHERE tournament_id = ?').get(id)) return reply.code(409).send({ error: 'The number of stations is locked after the first game is confirmed.' });
+      const changedPools = Array.from({ length: Math.max(oldSettings?.stations?.length ?? 0, stations.length) }, (_, i) => i).filter(station => JSON.stringify(oldSettings?.stations?.[station] ? { ...oldSettings.stations[station], mode: oldSettings.stations[station].mode ?? 'pool' } : null) !== JSON.stringify(stations[station] ? { ...stations[station], mode: stations[station].mode ?? 'pool' } : null));
+      for (const station of changedPools) if (oldSettings?.stations?.[station]?.mode !== 'fixed' && db.prepare('SELECT 1 FROM station_draws WHERE stage_id = ? AND station = ? AND confirmed = 1').get(stageId, station)) return reply.code(409).send({ error: `Unlock station ${station + 1} before changing its confirmed game pool.` });
       db.exec('BEGIN');
       try {
-        for (const station of changedPools) db.prepare('DELETE FROM station_draws WHERE stage_id = ? AND station = ? AND confirmed = 0').run(stageId, station);
+        for (const station of changedPools) {
+          db.prepare('DELETE FROM station_draws WHERE stage_id = ? AND station = ? AND (confirmed = 0 OR ? = 1)').run(stageId, station, oldSettings?.stations?.[station]?.mode === 'fixed' ? 1 : 0);
+          db.prepare('DELETE FROM station_sessions WHERE stage_id = ? AND station = ?').run(stageId, station);
+        }
+        const insertFixed = db.prepare('INSERT OR IGNORE INTO station_draws (stage_id, station, draw_id, game_index, confirmed) VALUES (?, ?, ?, 0, 1)');
+        stations.forEach((station, index) => { if (station.mode === 'fixed') insertFixed.run(stageId, index, randomUUID()); });
+        const displayed = db.prepare('SELECT station FROM display_wheels WHERE tournament_id = ? AND stage_id = ?').get(id, stageId);
+        if (displayed && (!stations[Number(displayed.station)] || stations[Number(displayed.station)].mode === 'fixed')) db.prepare('DELETE FROM display_wheels WHERE tournament_id = ?').run(id);
         db.prepare('INSERT INTO stage_settings VALUES (?, ?) ON CONFLICT(stage_id) DO UPDATE SET settings = excluded.settings').run(stageId, JSON.stringify({ stations, points }));
         db.exec('COMMIT');
       } catch (error) { db.exec('ROLLBACK'); throw error; }
     } else {
       if (typeof data.game !== 'string' || data.game.length > 100 || (stage.kind === 'duel' && ![1, 3, 5].includes(data.bestOf as number))) return reply.code(400).send({ error: 'Check the game and match format.' });
-      const settings = stage.kind === 'duel' ? { game: data.game.trim(), bestOf: data.bestOf } : { game: data.game.trim() };
-      db.prepare('INSERT INTO stage_settings VALUES (?, ?) ON CONFLICT(stage_id) DO UPDATE SET settings = excluded.settings').run(stageId, JSON.stringify(settings));
+      if (data.gameSelection !== undefined && !['fixed', 'pool'].includes(String(data.gameSelection))) return reply.code(400).send({ error: 'Choose a fixed game or a game pool.' });
+      if (data.gameSelection === 'pool' && (!Array.isArray(data.gamePool) || data.gamePool.length > 100 || data.gamePool.some(game => { const item = typeof game === 'string' ? { name: game } : game; return !item || typeof item !== 'object' || typeof item.name !== 'string' || !item.name.trim() || item.name.trim().length > 100 || (item.developer !== undefined && (typeof item.developer !== 'string' || item.developer.length > 100)) || (item.platform !== undefined && (typeof item.platform !== 'string' || item.platform.length > 100)) || (item.releaseYear !== undefined && (!Number.isInteger(item.releaseYear) || item.releaseYear < 1 || item.releaseYear > 9999)) || (item.description !== undefined && (typeof item.description !== 'string' || item.description.length > 1000)); }))) return reply.code(400).send({ error: 'Check the game pool.' });
+      const settings = { game: data.game.trim(), ...(stage.kind === 'duel' ? { bestOf: data.bestOf } : {}), ...(data.gameSelection ? { gameSelection: data.gameSelection } : {}), ...(data.gameSelection === 'pool' ? { gamePool: (data.gamePool as (string | { name: string })[]).map(game => typeof game === 'string' ? game.trim() : { ...game, name: game.name.trim() }) } : {}) };
+      const prior = db.prepare('SELECT settings FROM stage_settings WHERE stage_id = ?').get(stageId);
+      const previous = prior ? JSON.parse(String(prior.settings)) : null;
+      const selectionChanged = JSON.stringify([previous?.game, previous?.gameSelection, previous?.gamePool]) !== JSON.stringify([settings.game, settings.gameSelection, settings.gamePool]);
+      if (selectionChanged && previous?.gameSelection !== 'fixed' && db.prepare('SELECT 1 FROM station_draws WHERE stage_id = ? AND confirmed = 1').get(stageId)) return reply.code(409).send({ error: 'Unlock the confirmed game before changing its selection.' });
+      db.exec('BEGIN');
+      try {
+        if (selectionChanged) db.prepare('DELETE FROM station_draws WHERE stage_id = ? AND (confirmed = 0 OR ? = 1)').run(stageId, previous?.gameSelection === 'fixed' ? 1 : 0);
+        if (settings.gameSelection === 'fixed' && settings.game) db.prepare('INSERT OR IGNORE INTO station_draws (stage_id, station, draw_id, game_index, confirmed) VALUES (?, 0, ?, 0, 1)').run(stageId, randomUUID());
+        if (settings.gameSelection !== 'pool') db.prepare('DELETE FROM display_wheels WHERE tournament_id = ? AND stage_id = ?').run(id, stageId);
+        db.prepare('INSERT INTO stage_settings VALUES (?, ?) ON CONFLICT(stage_id) DO UPDATE SET settings = excluded.settings').run(stageId, JSON.stringify(settings));
+        db.exec('COMMIT');
+      } catch (error) { db.exec('ROLLBACK'); throw error; }
     }
     changed(id); return { ok: true };
   });
