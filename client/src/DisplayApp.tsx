@@ -52,18 +52,19 @@ export function DisplayApp({ tournamentId }: { tournamentId: string }) {
   const [revision, setRevision] = useState(0);
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState('');
+  const [deleted, setDeleted] = useState(false);
   useEffect(() => {
     let socket: WebSocket, retry: ReturnType<typeof setTimeout> | undefined, stopped = false;
     function connect() {
       socket = new WebSocket(`${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`);
-      socket.onmessage = event => { try { const data = JSON.parse(String(event.data)); if (data.status === 'ok') { setConnected(true); setRevision(value => value + 1); } else if (data.type === 'tournament-changed' && data.id === tournamentId) setRevision(value => value + 1); } catch { /* Ignore unrelated messages. */ } };
+      socket.onmessage = event => { try { const data = JSON.parse(String(event.data)); if (data.status === 'ok') { setConnected(true); setRevision(value => value + 1); } else if (data.type === 'tournament-changed' && data.id === tournamentId) setRevision(value => value + 1); else if (data.type === 'tournament-deleted' && data.id === tournamentId) setDeleted(true); } catch { /* Ignore unrelated messages. */ } };
       socket.onclose = () => { if (!stopped) { setConnected(false); retry = setTimeout(connect, 2000); } };
     }
     connect(); return () => { stopped = true; clearTimeout(retry); socket.close(); };
   }, [tournamentId]);
   useEffect(() => {
     let current = true;
-    fetch(`/api/tournaments/${tournamentId}`).then(async response => { if (!response.ok) throw new Error(response.status === 404 ? 'Tournament not found.' : 'Unable to load tournament.'); return response.json() as Promise<Tournament>; }).then(data => { if (current) { setTournament(data); setError(''); } }).catch(reason => { if (current) setError(reason instanceof TypeError ? 'Unable to connect. Retrying…' : reason.message); });
+    fetch(`/api/tournaments/${tournamentId}`).then(async response => { if (response.status === 404) { if (current) setDeleted(true); throw new Error('Tournament not found.'); } if (!response.ok) throw new Error('Unable to load tournament.'); return response.json() as Promise<Tournament>; }).then(data => { if (current) { setTournament(data); setError(''); } }).catch(reason => { if (current) setError(reason instanceof TypeError ? 'Unable to connect. Retrying…' : reason.message); });
     return () => { current = false; };
   }, [tournamentId, revision]);
   useEffect(() => {
@@ -74,6 +75,7 @@ export function DisplayApp({ tournamentId }: { tournamentId: string }) {
   const stage = tournament?.stages.find(item => item.status === 'active') ?? tournament?.stages.filter(item => item.status === 'closed').at(-1);
   const wheel = stage?.status === 'active' && tournament?.displayWheel?.stageId === stage.id ? tournament.displayWheel : null;
   const wheelStage = stage?.kind === 'two-station' ? stage : stage ? stageGameWheel(stage) : null;
+  if (deleted) return <main className="arcade-app tv-display"><p className="display-message" role="status">This tournament is no longer available.</p></main>;
   if (winner) return <main className="arcade-app tv-display tv-winner" aria-label="Tournament winner">
     {!connected && <span className="tv-winner-status" role="status">Disconnected · reconnecting…</span>}
     <section className="arcade-winner tv-winner-card">

@@ -80,6 +80,7 @@ export async function createApp(databasePath = 'data/retromania.sqlite') {
   await app.register(websocket);
   function authorized(header: string | undefined, id: string) { return !!header && sessions.get(header.replace(/^Bearer /, '')) === id; }
   function changed(id: string) { for (const socket of sockets) if (socket.readyState === 1) socket.send(JSON.stringify({ type: 'tournament-changed', id })); }
+  function removed(id: string) { for (const socket of sockets) if (socket.readyState === 1) socket.send(JSON.stringify({ type: 'tournament-deleted', id })); }
   function details(id: string, admin: boolean) {
     const tournament = db.prepare('SELECT id, name FROM tournaments WHERE id = ?').get(id);
     if (!tournament) return null;
@@ -117,6 +118,28 @@ export async function createApp(databasePath = 'data/retromania.sqlite') {
     const id = randomUUID(), salt = randomBytes(16).toString('hex'), token = randomBytes(32).toString('hex');
     db.prepare('INSERT INTO tournaments VALUES (?, ?, ?, ?)').run(id, name, salt, pinHash(pin, salt));
     sessions.set(token, id); changed(id); return reply.code(201).send({ id, token });
+  });
+  app.delete<{ Params: { id: string } }>('/api/tournaments/:id', async (request, reply) => {
+    const { id } = request.params;
+    if (!authorized(request.headers.authorization, id)) return reply.code(401).send({ error: 'Administrator access required.' });
+    if (!db.prepare('SELECT 1 FROM tournaments WHERE id = ?').get(id)) return reply.code(404).send({ error: 'Tournament not found.' });
+    const stages = 'SELECT id FROM stages WHERE tournament_id = ?';
+    const participants = 'SELECT id FROM participants WHERE tournament_id = ?';
+    db.exec('BEGIN');
+    try {
+      db.prepare(`DELETE FROM withdrawal_replacements WHERE stage_id IN (${stages}) OR participant_id IN (${participants}) OR replacement_id IN (${participants})`).run(id, id, id);
+      db.prepare(`DELETE FROM tie_resolutions WHERE tie_stage_id IN (${stages}) OR source_stage_id IN (${stages}) OR target_stage_id IN (${stages})`).run(id, id, id);
+      db.prepare(`DELETE FROM stage_results WHERE stage_id IN (${stages})`).run(id);
+      db.prepare(`DELETE FROM stage_entrants WHERE stage_id IN (${stages})`).run(id);
+      db.prepare(`DELETE FROM stage_forfeits WHERE stage_id IN (${stages})`).run(id);
+      db.prepare(`DELETE FROM attempts WHERE stage_id IN (${stages})`).run(id);
+      db.prepare(`DELETE FROM withdrawals WHERE participant_id IN (${participants}) OR stage_id IN (${stages})`).run(id, id);
+      db.prepare(`DELETE FROM stage_progress WHERE stage_id IN (${stages}) OR source_stage_id IN (${stages})`).run(id, id);
+      db.prepare('DELETE FROM tournaments WHERE id = ?').run(id);
+      db.exec('COMMIT');
+    } catch (error) { db.exec('ROLLBACK'); throw error; }
+    for (const [token, tournamentId] of sessions) if (tournamentId === id) sessions.delete(token);
+    removed(id); return { ok: true };
   });
   app.post<{ Params: { id: string }; Body: { pin?: unknown } }>('/api/tournaments/:id/login', async (request, reply) => {
     const row = db.prepare('SELECT pin_salt, pin_hash FROM tournaments WHERE id = ?').get(request.params.id);

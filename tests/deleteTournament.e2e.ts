@@ -1,0 +1,32 @@
+import { test, expect } from '@playwright/test';
+import { randomUUID } from 'node:crypto';
+
+test('an administrator can cancel and confirm deletion while other displays update', async ({ page, browser, request }) => {
+  const name = `Delete ${randomUUID()}`;
+  const event = await (await request.post('/api/tournaments', { data: { name, pin: '1234' } })).json();
+  const headers = { Authorization: `Bearer ${event.token}` };
+  await request.post(`/api/tournaments/${event.id}/stages`, { headers, data: { name: 'Round', kind: 'elimination', participantCount: 2 } });
+  await page.goto('/'); await page.getByRole('button', { name, exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Delete tournament' })).toHaveCount(0);
+  await page.getByLabel('Administrator PIN', { exact: true }).last().fill('1234');
+  await page.getByRole('button', { name: 'Unlock setup' }).click();
+  const spectator = await browser.newPage(); await spectator.goto('/'); await spectator.getByRole('button', { name, exact: true }).click();
+  const tv = await browser.newPage(); await tv.goto(`/display/${event.id}`);
+  await expect(tv.getByRole('heading', { name: 'Round' })).toBeVisible();
+  const deleteSection = page.getByRole('region', { name: 'Delete tournament' });
+  await deleteSection.getByRole('button', { name: 'Delete tournament' }).click();
+  const confirmation = page.getByRole('group', { name: 'Confirm tournament deletion' });
+  await expect(confirmation).toContainText(name);
+  await expect(confirmation).toContainText('backup files are kept');
+  await confirmation.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.getByRole('heading', { name })).toBeVisible();
+  await deleteSection.getByRole('button', { name: 'Delete tournament' }).click();
+  await confirmation.getByRole('button', { name: 'Confirm deletion' }).click();
+  await expect(page.getByRole('button', { name, exact: true })).toHaveCount(0);
+  await expect(page.getByRole('status').filter({ hasText: 'The tournament was deleted.' })).toBeVisible();
+  await expect(spectator.getByRole('button', { name, exact: true })).toHaveCount(0);
+  await expect(spectator.getByText('The tournament was deleted.')).toBeVisible();
+  await expect(tv.getByText('This tournament is no longer available.')).toBeVisible();
+  await tv.reload(); await expect(tv.getByText('This tournament is no longer available.')).toBeVisible();
+  await spectator.close(); await tv.close();
+});

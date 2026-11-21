@@ -14,6 +14,7 @@ import { DownloadBackup, RestoreBackup } from './BackupControls';
 import { SoundProvider } from './Sound';
 import { DisplayApp } from './DisplayApp';
 import { TrophySetup } from './TrophySetup';
+import { DeleteTournament } from './DeleteTournament';
 
 
 
@@ -29,7 +30,7 @@ async function api<T>(path: string, options: RequestInit = {}, token = ''): Prom
 
   const data = await response.json();
 
-  if (!response.ok) throw new Error(data.error || 'Request failed.');
+  if (!response.ok) throw Object.assign(new Error(data.error || 'Request failed.'), { status: response.status });
 
   return data as T;
 
@@ -69,7 +70,7 @@ function App() {
 
     let active = true;
 
-    api<Tournament>(`/api/tournaments/${selected}`, {}, token).then(data => { if (active) { if (token && !data.isAdmin) { sessionStorage.removeItem(`admin:${selected}`); setToken(''); } setTournament(data); } }).catch(() => { if (active) setError('Could not load the tournament.'); });
+    api<Tournament>(`/api/tournaments/${selected}`, {}, token).then(data => { if (active) { if (token && !data.isAdmin) { sessionStorage.removeItem(`admin:${selected}`); setToken(''); } setTournament(data); } }).catch((error: Error & { status?: number }) => { if (!active) return; if (error.status === 404) { sessionStorage.removeItem(`admin:${selected}`); selectedRef.current = ''; setSelected(''); setToken(''); setTournament(null); setNotice('The tournament is no longer available.'); } else setError('Could not load the tournament.'); });
 
     return () => { active = false; };
 
@@ -83,7 +84,7 @@ function App() {
 
       socket = new WebSocket(`${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`);
 
-      socket.onmessage = event => { try { const data = JSON.parse(String(event.data)); if (data.status === 'ok') { setConnection('connected'); setRevision(n => n + 1); } else if (data.type === 'tournament-changed') { if (data.id === selectedRef.current) setRevision(n => n + 1); else void refreshList(); } } catch { /* ignore unrelated messages */ } };
+      socket.onmessage = event => { try { const data = JSON.parse(String(event.data)); if (data.status === 'ok') { setConnection('connected'); setRevision(n => n + 1); } else if (data.type === 'tournament-changed') { if (data.id === selectedRef.current) setRevision(n => n + 1); else void refreshList(); } else if (data.type === 'tournament-deleted') { if (data.id === selectedRef.current) { sessionStorage.removeItem(`admin:${data.id}`); select(''); setNotice('The tournament was deleted.'); } void refreshList(); } } catch { /* ignore unrelated messages */ } };
 
       socket.onclose = () => { if (!stopped) { setConnection('disconnected'); retry = setTimeout(connect, 2000); } };
 
@@ -172,6 +173,7 @@ function App() {
         {token && <TrophySetup tournamentId={selected} token={token} hasImage={tournament.hasTrophyImage} revision={revision} onChange={() => setRevision(n => n + 1)} onError={setError} />}
 
         {token && <DownloadBackup tournamentId={selected} token={token} onError={setError} />}
+        {token && <DeleteTournament tournamentId={selected} name={tournament.name} token={token} onError={setError} onDeleted={() => { sessionStorage.removeItem(`admin:${selected}`); if (selectedRef.current === selected) select(''); setNotice('The tournament was deleted.'); void refreshList(); }} />}
 
         </TournamentViews>
 
